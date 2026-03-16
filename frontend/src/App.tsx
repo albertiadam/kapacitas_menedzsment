@@ -1,121 +1,60 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, useEffect, use } from 'react'
 import './App.css'
 
+interface KalapResponse {
+  kalap: string;
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [kalapId,setKalapId] = useState("");
+  const [eredmeny, setEredmeny] = useState<KalapResponse | null>(null);
+  const [szamolo, setSzamolo] = useState(0);
 
+  const fetchData = async () => {
+    try {
+      if (kalapId === "asd") {
+        setEredmeny({kalap: "Ez egy teszt kalap!"});
+      }
+      else{
+        const response = await fetch(`http://127.0.0.1:8000/kalap/${kalapId}`);
+        const data = await response.json();
+        setEredmeny(data);
+      }
+
+    } catch (error) {
+      console.error('Hiba a lekérés során:', error);
+    }
+  }
+
+ 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <div>
+      <p>Helloka!</p>
+      <input 
+        type="text" 
+        id="kalap-id" 
+        placeholder="Kalap ID" 
+        value={kalapId}
+        onChange={(e) => setKalapId(e.target.value)}
+      />
+      <button onClick={fetchData}>Adatok lekérése</button>
+
+      {eredmeny && (
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+          <h2>Eredmény:</h2>
+          <p>{eredmeny.kalap}</p>
         </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      )}
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <button onClick={
+        () => {setSzamolo(szamolo + 1)
+        }
+      }>asd</button>
+      {szamolo != 0 && 
+      <p>{szamolo}</p>}
+    </div>
   )
 }
+
 
 export default App
