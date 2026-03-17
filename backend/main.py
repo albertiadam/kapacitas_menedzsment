@@ -7,12 +7,6 @@ from backend import models
 from datetime import datetime
 from typing import List
 
-class ProjectCreate(BaseModel):
-    name: str
-    description: str
-    start: datetime
-    end: datetime
-    revenue: float
 
 Base.metadata.create_all(bind=engine)
 
@@ -39,7 +33,7 @@ def read_projects(db: Session = Depends(get_db)):
     return projects
 
 @app.post("/projects")
-def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+def create_project(project: models.ProjectCreate, db: Session = Depends(get_db)):
     db_project = models.Projects(**project.model_dump())
     db.add(db_project)
     db.commit()
