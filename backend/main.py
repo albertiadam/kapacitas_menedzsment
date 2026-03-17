@@ -1,11 +1,24 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from backend.database import engine, Base, get_db
+from backend import models
+from datetime import datetime
+from typing import List
 
+class ProjectCreate(BaseModel):
+    name: str
+    description: str
+    start: datetime
+    end: datetime
+    revenue: float
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="My FastAPI Backend",
-    description="A simple FastAPI backend for demonstration purposes.",
+    title="Adroit project backend API",
+    description="Backend API for managing projects.",
     version="1.0.0",
 )
 app.add_middleware(
@@ -20,14 +33,15 @@ app.add_middleware(
 def read_root():
     return {"message": "Heloka!"}
 
-@app.get("/kalap")
-def get_kalap():
-    return {"kalap": "Ez egy kalap!"}
+@app.get("/projects")
+def read_projects(db: Session = Depends(get_db)):
+    projects = db.query(models.Projects).all()
+    return projects
 
-@app.get("/kalap/{kalap_id}")
-def get_kalap_by_id(kalap_id: int):
-    asd = {
-        1: "Kalap1",
-        2: "Kalap2",
-    }
-    return {"kalap":asd.get(kalap_id, "Nincs ilyen kalap")}
+@app.post("/projects")
+def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+    db_project = models.Projects(**project.model_dump())
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
