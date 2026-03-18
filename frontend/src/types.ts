@@ -7,10 +7,16 @@ export interface Project {
   revenue: number;
 }
 
-export interface ProjectForm {
+export interface ProjectFormType {
   name: string
   description: string
   start: string
   end: string
   revenue: number
+}
+
+export interface ReturnProp {
+  onSuccess: () => void
+  onFail: () => void
+  onCancel: () => void
 }
