@@ -1,4 +1,3 @@
-
 // GET MODELS
 
 export interface Project {
