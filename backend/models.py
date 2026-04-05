@@ -1,7 +1,7 @@
 from sqlalchemy import Column,Integer,String,Float,Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship, Session
 from .database import Base
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import calendar
 from pydantic import BaseModel, field_validator
 from .constants import DAILY_HOUR_WORK
@@ -20,6 +20,14 @@ class ProjectStatus(enum.Enum):
 def is_business_day(date: datetime) -> bool:
     """Check if a date is a business day (Monday-Friday)."""
     return date.weekday() < 5
+
+
+def normalize_datetime_to_naive_utc(dt: datetime) -> datetime:
+    if dt is None:
+        return dt
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 # GET MODELS (db tables)
 
@@ -165,6 +173,11 @@ class ProjectCreate(BaseModel):
     fix_cost: float
     revenue: float
 
+    @field_validator('start', 'end', mode='after')
+    @classmethod
+    def normalize_datetime(cls, v):
+        return normalize_datetime_to_naive_utc(v)
+
     @field_validator('start')
     @classmethod
     def normalize_start(cls, v):
@@ -205,6 +218,11 @@ class ProjectSkillEmployeeCreate(BaseModel):
     skill_start: datetime
     skill_end: datetime
 
+    @field_validator('skill_start', 'skill_end', mode='after')
+    @classmethod
+    def normalize_datetime(cls, v):
+        return normalize_datetime_to_naive_utc(v)
+
     @field_validator('skill_end')
     @classmethod
     def skill_end_must_be_after_start(cls, v, info):
@@ -219,6 +237,16 @@ class ProjectSkillEmployeeCreate(BaseModel):
             raise ValueError('capacity_on_project must be between 0 and 1')
         return v
 
+    @field_validator('skill_start')
+    @classmethod
+    def normalize_start(cls, v):
+        return v.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    @field_validator('skill_end')
+    @classmethod
+    def normalize_end(cls, v):
+        return v.replace(hour=23, minute=59, second=59, microsecond=0)
+
 # UPDATE MODELS
 
 class ProjectUpdate(BaseModel):
@@ -230,6 +258,11 @@ class ProjectUpdate(BaseModel):
     status: ProjectStatus = None
     fix_cost: float = None
     revenue: float = None
+
+    @field_validator('start', 'end', mode='after')
+    @classmethod
+    def normalize_datetime(cls, v):
+        return normalize_datetime_to_naive_utc(v)
 
     @field_validator('end')
     @classmethod
@@ -270,6 +303,11 @@ class ProjectSkillEmployeeUpdate(BaseModel):
     skill_start: datetime = None
     skill_end: datetime = None
 
+    @field_validator('skill_start', 'skill_end', mode='after')
+    @classmethod
+    def normalize_datetime(cls, v):
+        return normalize_datetime_to_naive_utc(v)
+
     @field_validator('skill_end')
     @classmethod
     def skill_end_must_be_after_start(cls, v, info):
@@ -283,6 +321,16 @@ class ProjectSkillEmployeeUpdate(BaseModel):
         if v <= 0 or v > 1:
             raise ValueError('capacity_on_project must be between 0 and 1')
         return v
+    
+    @field_validator('skill_start')
+    @classmethod
+    def normalize_start(cls, v):
+        return v.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    @field_validator('skill_end')
+    @classmethod
+    def normalize_end(cls, v):
+        return v.replace(hour=23, minute=59, second=59, microsecond=0)
 
 # RESPONSE MODELS
 
