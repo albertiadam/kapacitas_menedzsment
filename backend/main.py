@@ -52,6 +52,19 @@ def update_project(project_id: int, project_update: models.ProjectUpdate, db: Se
         raise HTTPException(status_code=404, detail="Project not found")
     
     update_data = project_update.model_dump(exclude_unset=True)
+
+    new_start = update_data.get('start', db_project.start)
+    new_end = update_data.get('end', db_project.end)
+
+    if new_start is not None and new_end is not None and new_end <= new_start:
+        raise HTTPException(status_code=400, detail="end must be after start")
+
+    if 'end' in update_data and 'start' not in update_data and new_end <= db_project.start:
+        raise HTTPException(status_code=400, detail="end must be after current project start")
+
+    if 'start' in update_data and 'end' not in update_data and new_start >= db_project.end:
+        raise HTTPException(status_code=400, detail="start must be before current project end")
+
     for field, value in update_data.items():
         setattr(db_project, field, value)
     
@@ -119,6 +132,7 @@ def update_employee(employee_id: int, employee_update: models.EmployeeUpdate, db
     return db_employee
 
 # SKILL-EMPLOYEE
+
 @app.get("/skills-employees")
 def read_skills_employees(db: Session = Depends(get_db)):
     skills_employees = db.query(models.SkillsEmployees).all()
@@ -163,6 +177,20 @@ def update_skill_employee(
         raise HTTPException(status_code=404, detail="Skill-employee relationship not found")
     
     update_data = skill_employee_update.model_dump(exclude_unset=True)
+
+    new_skill_id = update_data.get('skill_id', skill_id)
+    new_employee_id = update_data.get('employee_id', employee_id)
+    if new_skill_id != skill_id or new_employee_id != employee_id:
+        skill_employee_check = db.query(models.SkillsEmployees).filter(
+            models.SkillsEmployees.skill_id == new_skill_id,
+            models.SkillsEmployees.employee_id == new_employee_id
+        ).first()
+        if not skill_employee_check:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Employee {new_employee_id} does not have skill {new_skill_id}"
+            )
+
     for field, value in update_data.items():
         setattr(db_skill_employee, field, value)
     
@@ -220,6 +248,18 @@ def create_project_skill_employee(project_skill_employee: models.ProjectSkillEmp
             status_code=400, 
             detail=f"Employee {project_skill_employee.employee_id} does not have skill {project_skill_employee.skill_id}"
         )
+
+    if project_skill_employee.skill_start < project.start:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Skill assignment start date ({project_skill_employee.skill_start}) cannot be before project start date ({project.start})"
+        )
+    
+    if project_skill_employee.skill_end > project.end:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Skill assignment end date ({project_skill_employee.skill_end}) cannot be after project end date ({project.end})"
+        )
     
     db_project_skill_employee = models.ProjectSkillsEmployees(**project_skill_employee.model_dump())
     db.add(db_project_skill_employee)
@@ -255,6 +295,37 @@ def update_project_skill_employee(
         raise HTTPException(status_code=404, detail="Project-skill-employee relationship not found")
     
     update_data = project_skill_employee_update.model_dump(exclude_unset=True)
+    
+    new_skill_id = update_data.get('skill_id', skill_id)
+    new_employee_id = update_data.get('employee_id', employee_id)
+    
+    if new_skill_id != skill_id or new_employee_id != employee_id:
+        skill_employee_check = db.query(models.SkillsEmployees).filter(
+            models.SkillsEmployees.skill_id == new_skill_id,
+            models.SkillsEmployees.employee_id == new_employee_id
+        ).first()
+        if not skill_employee_check:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Employee {new_employee_id} does not have skill {new_skill_id}"
+            )
+    
+    new_skill_start = update_data.get('skill_start', db_project_skill_employee.skill_start)
+    new_skill_end = update_data.get('skill_end', db_project_skill_employee.skill_end)
+    
+    if new_skill_start != db_project_skill_employee.skill_start or new_skill_end != db_project_skill_employee.skill_end:
+        if new_skill_start < db_project_skill_employee.project.start:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Skill assignment start date ({new_skill_start}) cannot be before project start date ({db_project_skill_employee.project.start})"
+            )
+        
+        if new_skill_end > db_project_skill_employee.project.end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Skill assignment end date ({new_skill_end}) cannot be after project end date ({db_project_skill_employee.project.end})"
+            )
+    
     for field, value in update_data.items():
         setattr(db_project_skill_employee, field, value)
     
@@ -295,6 +366,9 @@ def get_employee_capacity(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
     
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+
     employee = db.query(models.Employees).filter(models.Employees.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")

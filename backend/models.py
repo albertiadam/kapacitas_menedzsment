@@ -48,8 +48,7 @@ class Projects(Base):
                 if is_business_day(current_date):
                     business_days += 1
                 current_date += timedelta(days=1)
-            
-            total_cost += pse.employee.hourly_rate * pse.capacity_on_project * DAILY_HOUR_WORK * business_days
+            total_cost += pse.employee.hourly_rate * pse.capacity_on_project * DAILY_HOUR_WORK * (business_days + 1)
         return total_cost
 
 class Skills(Base):
@@ -166,6 +165,16 @@ class ProjectCreate(BaseModel):
     fix_cost: float
     revenue: float
 
+    @field_validator('start')
+    @classmethod
+    def normalize_start(cls, v):
+        return v.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    @field_validator('end')
+    @classmethod
+    def normalize_end(cls, v):
+        return v.replace(hour=23, minute=59, second=59, microsecond=0)
+
     @field_validator('end')
     @classmethod
     def end_must_be_after_start(cls, v, info):
@@ -202,7 +211,13 @@ class ProjectSkillEmployeeCreate(BaseModel):
         if info.data.get('skill_start') and v <= info.data['skill_start']:
             raise ValueError('skill_end must be after skill_start')
         return v
-
+    
+    @field_validator('capacity_on_project')
+    @classmethod
+    def capacity_must_be_positive(cls, v):
+        if v <= 0 or v > 1:
+            raise ValueError('capacity_on_project must be between 0 and 1')
+        return v
 
 # UPDATE MODELS
 
@@ -222,6 +237,20 @@ class ProjectUpdate(BaseModel):
         if v is not None and info.data.get('start') and v <= info.data['start']:
             raise ValueError('end must be after start')
         return v
+    
+    @field_validator('start')
+    @classmethod
+    def normalize_start(cls, v):
+        if not v:
+            return v
+        return v.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    @field_validator('end')
+    @classmethod
+    def normalize_end(cls, v):
+        if not v:
+            return v
+        return v.replace(hour=23, minute=59, second=59, microsecond=0)
 
 class SkillUpdate(BaseModel):
     name: str = None
@@ -246,6 +275,13 @@ class ProjectSkillEmployeeUpdate(BaseModel):
     def skill_end_must_be_after_start(cls, v, info):
         if v is not None and info.data.get('skill_start') and v <= info.data['skill_start']:
             raise ValueError('skill_end must be after skill_start')
+        return v
+    
+    @field_validator('capacity_on_project')
+    @classmethod
+    def capacity_must_be_positive(cls, v):
+        if v <= 0 or v > 1:
+            raise ValueError('capacity_on_project must be between 0 and 1')
         return v
 
 # RESPONSE MODELS
