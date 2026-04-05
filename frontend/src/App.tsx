@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Project, ProjectFormType } from './types'
+import type { Project, ProjectPost } from './types'
 import './App.css'
 import { ProjectForm } from './ProjectForm'
 

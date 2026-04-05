@@ -1,9 +1,9 @@
-import type { ProjectFormType, ReturnProp } from './types'
+import type { ProjectPost, ReturnProp } from './types'
 import { useState } from 'react'
 import './ProjectForm.css'
 
 
-const initialForm: ProjectFormType = {
+const initialForm: ProjectPost = {
     name: '',
     description: '',
     start: '',
@@ -12,7 +12,7 @@ const initialForm: ProjectFormType = {
 };
 
 export const ProjectForm=({onSuccess,onFail,onCancel}: ReturnProp) => {
-    const [formData, setFormData] = useState<ProjectFormType>(initialForm);
+    const [formData, setFormData] = useState<ProjectPost>(initialForm);
 
     const handleSave = async (e: React.SyntheticEvent) => {
         e.preventDefault();
