@@ -78,6 +78,14 @@ class Employees(Base):
     skills = relationship("SkillsEmployees", back_populates="employee")
     project_skills_employees = relationship("ProjectSkillsEmployees", back_populates="employee")
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'base_capacity': self.base_capacity,
+            'hourly_rate': self.hourly_rate,
+        }
+
     def get_capacity_for_period(self, start_date: datetime, end_date: datetime, db: Session):
         """
         Calculate capacity metrics for a given time period.
@@ -122,12 +130,12 @@ class Employees(Base):
                         elif project_status == ProjectStatus.PLANNED:
                             day_planned += assignment.capacity_on_project
                 
-                day_available = max(0.0, self.base_capacity - (day_allocated + day_planned))
-                min_available = min(min_available, day_available)
                 max_allocated = max(max_allocated, day_allocated)
                 max_planned = max(max_planned, day_planned)
             
             current_date += timedelta(days=1)
+        
+        min_available = self.base_capacity - max_allocated - max_planned
         
         return {
             'allocated_capacity': max_allocated,

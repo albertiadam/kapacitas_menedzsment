@@ -344,7 +344,32 @@ def update_project_skill_employee(
         "skill_end": db_project_skill_employee.skill_end
     }
 
-# GENERAL
+# EMPLOYEE CAPACITIES
+
+@app.get("/employee-capacities")
+def get_employee_get_employee_capacities(
+    start: str,
+    end: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        start_date = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_date = datetime.fromisoformat(end.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
+    
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+    
+    db_employees = db.query(models.Employees).all()
+    employee_capacities = []
+    for employee in db_employees:
+        capacity_info = employee.get_capacity_for_period(start_date, end_date, db)
+        employee_capacities.append({
+            **employee.to_dict(),
+            **capacity_info
+        })
+    return employee_capacities
 
 @app.get("/employee-capacity/{employee_id}")
 def get_employee_capacity(
@@ -375,3 +400,59 @@ def get_employee_capacity(
     
     capacity_info = employee.get_capacity_for_period(start_date, end_date, db)
     return capacity_info
+
+@app.get("/get-available-employee-by-skill")
+def get_available_employee_by_skill(
+    skill_id: int,
+    start: str,
+    end: str,
+    proficiency: int = 1,
+    needed_capacity: float = 0.0,
+    db: Session = Depends(get_db)
+):
+    """
+    Get available employees for a given skill and time period.
+    
+    Query parameters:
+    - start: ISO date string (YYYY-MM-DDTHH:MM:SS)
+    - end: ISO date string (YYYY-MM-DDTHH:MM:SS)
+    """
+    try:
+        start_date = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_date = datetime.fromisoformat(end.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
+    
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+    employees = db.query(models.Employees).join(models.SkillsEmployees).filter(
+        models.SkillsEmployees.skill_id == skill_id,
+        models.SkillsEmployees.proficiency >= proficiency
+    ).all()
+    
+    available_employees = []
+    for employee in employees:
+        capacity_info = employee.get_capacity_for_period(start_date, end_date, db)
+        if capacity_info['available_capacity'] > needed_capacity:
+            available_employees.append(dict(availability='fully', **employee.to_dict(),**capacity_info))
+        elif (employee.base_capacity - capacity_info['allocated_capacity']) > needed_capacity:
+            available_employees.append(dict(availability='partially', **employee.to_dict(),**capacity_info))
+        else:
+            available_employees.append(dict(availability='not', **employee.to_dict(),**capacity_info))
+    
+    return available_employees
+
+# GENERAL
+
+@app.get("/delete-db")
+def delete_db(db: Session = Depends(get_db)):
+    db.query(models.ProjectSkillsEmployees).delete()
+    db.query(models.SkillsEmployees).delete()
+    db.query(models.Projects).delete()
+    db.query(models.Skills).delete()
+    db.query(models.Employees).delete()
+    db.commit()
+    return {"message": "Database cleared"}
+
+
