@@ -33,12 +33,12 @@ def read_root():
 # PROJECTS
 
 @app.get("/projects", response_model=List[models.ProjectResponse])
-def read_projects(db: Session = Depends(get_db)):
+def read_projects(db: Session = Depends(get_db)) -> List[models.ProjectResponse]:
     projects = db.query(models.Projects).all()
     return projects
 
 @app.post("/projects")
-def create_project(project: models.ProjectCreate, db: Session = Depends(get_db)):
+def create_project(project: models.ProjectCreate, db: Session = Depends(get_db)) -> models.Projects:
     db_project = models.Projects(**project.model_dump())
     db.add(db_project)
     db.commit()
@@ -46,7 +46,7 @@ def create_project(project: models.ProjectCreate, db: Session = Depends(get_db))
     return db_project
 
 @app.put("/projects/{project_id}")
-def update_project(project_id: int, project_update: models.ProjectUpdate, db: Session = Depends(get_db)):
+def update_project(project_id: int, project_update: models.ProjectUpdate, db: Session = Depends(get_db)) -> models.Projects:
     db_project = db.query(models.Projects).filter(models.Projects.id == project_id).first()
     if not db_project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -73,7 +73,7 @@ def update_project(project_id: int, project_update: models.ProjectUpdate, db: Se
     return db_project
 
 @app.delete("/projects/{project_id}")
-def delete_project(project_id: int, db: Session = Depends(get_db)):
+def delete_project(project_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
     """
     Delete a project by ID.
     """
@@ -88,12 +88,12 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 # SKILLS
 
 @app.get("/skills")
-def read_skills(db: Session = Depends(get_db)):
+def read_skills(db: Session = Depends(get_db)) -> List[models.Skills]:
     skills = db.query(models.Skills).all()
     return skills
 
 @app.post("/skills")
-def create_skill(skill: models.SkillCreate, db: Session = Depends(get_db)):
+def create_skill(skill: models.SkillCreate, db: Session = Depends(get_db)) -> models.Skills:
     db_skill = models.Skills(**skill.model_dump())
     db.add(db_skill)
     db.commit()
@@ -101,7 +101,7 @@ def create_skill(skill: models.SkillCreate, db: Session = Depends(get_db)):
     return db_skill
 
 @app.put("/skills/{skill_id}")
-def update_skill(skill_id: int, skill_update: models.SkillUpdate, db: Session = Depends(get_db)):
+def update_skill(skill_id: int, skill_update: models.SkillUpdate, db: Session = Depends(get_db)) -> models.Skills:
     db_skill = db.query(models.Skills).filter(models.Skills.id == skill_id).first()
     if not db_skill:
         raise HTTPException(status_code=404, detail="Skill not found")
@@ -115,7 +115,7 @@ def update_skill(skill_id: int, skill_update: models.SkillUpdate, db: Session = 
     return db_skill
 
 @app.delete("/skills/{skill_id}")
-def delete_skill(skill_id: int, db: Session = Depends(get_db)):
+def delete_skill(skill_id: int, db: Session = Depends(get_db)) -> dict[str,str]:
     """
     Delete a skill by ID.
     """
@@ -130,12 +130,12 @@ def delete_skill(skill_id: int, db: Session = Depends(get_db)):
 # EMPLOYEES
 
 @app.get("/employees")
-def read_employees(db: Session = Depends(get_db)):
+def read_employees(db: Session = Depends(get_db)) -> List[models.Employees]:
     employees = db.query(models.Employees).all()
     return employees
 
 @app.post("/employees")
-def create_employee(employee: models.EmployeeCreate, db: Session = Depends(get_db)):
+def create_employee(employee: models.EmployeeCreate, db: Session = Depends(get_db)) -> models.Employees:
     db_employee = models.Employees(**employee.model_dump())
     db.add(db_employee)
     db.commit()
@@ -143,7 +143,7 @@ def create_employee(employee: models.EmployeeCreate, db: Session = Depends(get_d
     return db_employee
 
 @app.put("/employees/{employee_id}")
-def update_employee(employee_id: int, employee_update: models.EmployeeUpdate, db: Session = Depends(get_db)):
+def update_employee(employee_id: int, employee_update: models.EmployeeUpdate, db: Session = Depends(get_db)) -> models.Employees:
     db_employee = db.query(models.Employees).filter(models.Employees.id == employee_id).first()
     if not db_employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -157,7 +157,7 @@ def update_employee(employee_id: int, employee_update: models.EmployeeUpdate, db
     return db_employee
 
 @app.delete("/employees/{employee_id}")
-def delete_employee(employee_id: int, db: Session = Depends(get_db)):
+def delete_employee(employee_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
     """
     Delete an employee by ID.
     """
@@ -172,7 +172,7 @@ def delete_employee(employee_id: int, db: Session = Depends(get_db)):
 # SKILL-EMPLOYEE
 
 @app.get("/skills-employees")
-def read_skills_employees(db: Session = Depends(get_db)):
+def read_skills_employees(db: Session = Depends(get_db)) -> List[dict[str, str | int]]:
     """
     Get all skill-employee relationships with skill and employee names.
     """
@@ -190,7 +190,7 @@ def read_skills_employees(db: Session = Depends(get_db)):
 
 @app.post("/skills-employees")
 def create_skill_employee(skill_employee: models.SkillEmployeeCreate, db: Session = Depends(get_db
-)):
+)) -> dict[str, str | int]:
     """
     Create a new skill-employee relationship.
     """
@@ -212,7 +212,7 @@ def update_skill_employee(
     employee_id: int, 
     skill_employee_update: models.SkillEmployeeUpdate, 
     db: Session = Depends(get_db)
-):
+) -> dict[str, str | int]:
     """
     Update skill-employee relationship.
     """
@@ -252,7 +252,7 @@ def update_skill_employee(
     }
 
 @app.delete("/skills-employees/{skill_id}/{employee_id}")
-def delete_skill_employee(skill_id: int, employee_id: int, db: Session = Depends(get_db)):
+def delete_skill_employee(skill_id: int, employee_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
     """
     Delete skill-employee relationship.
     """
@@ -270,7 +270,7 @@ def delete_skill_employee(skill_id: int, employee_id: int, db: Session = Depends
 # PROJECT-SKILL-EMPLOYEE
 
 @app.get("/project-skills-employees")
-def read_project_skills_employees(db: Session = Depends(get_db)):
+def read_project_skills_employees(db: Session = Depends(get_db)) -> List[dict[str, str | int | float | datetime]]:
     """
     Get all project-skill-employee relationships with project, skill, and employee names.
     """
@@ -292,7 +292,10 @@ def read_project_skills_employees(db: Session = Depends(get_db)):
     ]
 
 @app.post("/project-skills-employees")
-def create_project_skill_employee(project_skill_employee: models.ProjectSkillEmployeeCreate, db: Session = Depends(get_db)):
+def create_project_skill_employee(
+    project_skill_employee: models.ProjectSkillEmployeeCreate,
+    db: Session = Depends(get_db)
+) -> dict[str, str | int | float | datetime]:
     """
     Create a new project-skill-employee relationship.
     
@@ -360,7 +363,7 @@ def update_project_skill_employee(
     employee_id: int,
     project_skill_employee_update: models.ProjectSkillEmployeeUpdate,
     db: Session = Depends(get_db)
-):
+) -> dict[str, str | int | float | datetime]:
     """
     Update project-skill-employee relationship.
     
@@ -428,7 +431,12 @@ def update_project_skill_employee(
     }
 
 @app.delete("/project-skills-employees/{project_id}/{skill_id}/{employee_id}")
-def delete_project_skill_employee(project_id: int, skill_id: int, employee_id: int, db: Session = Depends(get_db)):
+def delete_project_skill_employee(
+    project_id: int,
+    skill_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db)
+) -> dict[str, str]:
     """
     Delete project-skill-employee relationship.
     """
@@ -451,7 +459,7 @@ def get_employee_get_employee_capacities(
     start: str,
     end: str,
     db: Session = Depends(get_db),
-):
+) -> List[dict[str, str | int | float | datetime]]:
     """
     Get capacities for all employees for a given time period.
     
@@ -484,7 +492,7 @@ def get_employee_capacity(
     start: str,
     end: str,
     db: Session = Depends(get_db)
-):
+) -> dict[str, str | int | float | datetime]:
     """
     Get employee capacity for a given time period.
     
@@ -517,7 +525,7 @@ def get_available_employee_by_skill(
     proficiency: int = 1,
     needed_capacity: float = 0.0,
     db: Session = Depends(get_db)
-):
+) -> List[dict[str, str | int | float | datetime]]:
     """
     Get available employees for a given skill and time period.
     
@@ -557,7 +565,7 @@ def get_available_employee_by_skill(
 # GENERAL
 
 @app.get("/delete-db")
-def delete_db(db: Session = Depends(get_db)):
+def delete_db(db: Session = Depends(get_db)) -> dict[str, str]:
     """
     Delete all data from the database.
     """

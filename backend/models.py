@@ -79,7 +79,7 @@ class Employees(Base):
     skills = relationship("SkillsEmployees", back_populates="employee")
     project_skills_employees = relationship("ProjectSkillsEmployees", back_populates="employee")
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
             'id': self.id,
             'name': self.name,
@@ -87,7 +87,7 @@ class Employees(Base):
             'hourly_rate': self.hourly_rate,
         }
 
-    def get_capacity_for_period(self, start_date: datetime, end_date: datetime, db: Session):
+    def get_capacity_for_period(self, start_date: datetime, end_date: datetime, db: Session) -> dict[str,float]:
         """
         Calculate capacity metrics for a given time period.
         
