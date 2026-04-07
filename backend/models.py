@@ -8,15 +8,7 @@ from .constants import DAILY_HOUR_WORK
 import calendar
 import enum
 
-# Enums
-
-class ProjectStatus(enum.Enum):
-    PLANNED = "planned"
-    ONGOING = "ongoing"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    ON_HOLD = "on_hold"
-
+# Functions
 def is_business_day(date: datetime) -> bool:
     """Check if a date is a business day (Monday-Friday)."""
     return date.weekday() < 5
@@ -28,6 +20,15 @@ def normalize_datetime_to_naive_utc(dt: datetime) -> datetime:
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
+# Enums
+
+class ProjectStatus(enum.Enum):
+    PLANNED = "planned"
+    ONGOING = "ongoing"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    ON_HOLD = "on_hold"
+
 
 # GET MODELS (db tables)
 

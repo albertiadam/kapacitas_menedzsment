@@ -72,6 +72,18 @@ def update_project(project_id: int, project_update: models.ProjectUpdate, db: Se
     db.refresh(db_project)
     return db_project
 
+@app.delete("/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a project by ID.
+    """
+    db_project = db.query(models.Projects).filter(models.Projects.id == project_id).first()
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    db.delete(db_project)
+    db.commit()
+    return {"message": "Project deleted successfully"}
 
 # SKILLS
 
@@ -102,6 +114,19 @@ def update_skill(skill_id: int, skill_update: models.SkillUpdate, db: Session = 
     db.refresh(db_skill)
     return db_skill
 
+@app.delete("/skills/{skill_id}")
+def delete_skill(skill_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a skill by ID.
+    """
+    db_skill = db.query(models.Skills).filter(models.Skills.id == skill_id).first()
+    if not db_skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    db.delete(db_skill)
+    db.commit()
+    return {"message": "Skill deleted successfully"}
+
 # EMPLOYEES
 
 @app.get("/employees")
@@ -131,10 +156,26 @@ def update_employee(employee_id: int, employee_update: models.EmployeeUpdate, db
     db.refresh(db_employee)
     return db_employee
 
+@app.delete("/employees/{employee_id}")
+def delete_employee(employee_id: int, db: Session = Depends(get_db)):
+    """
+    Delete an employee by ID.
+    """
+    db_employee = db.query(models.Employees).filter(models.Employees.id == employee_id).first()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    db.delete(db_employee)
+    db.commit()
+    return {"message": "Employee deleted successfully"}
+
 # SKILL-EMPLOYEE
 
 @app.get("/skills-employees")
 def read_skills_employees(db: Session = Depends(get_db)):
+    """
+    Get all skill-employee relationships with skill and employee names.
+    """
     skills_employees = db.query(models.SkillsEmployees).all()
     return [
         {
@@ -150,6 +191,9 @@ def read_skills_employees(db: Session = Depends(get_db)):
 @app.post("/skills-employees")
 def create_skill_employee(skill_employee: models.SkillEmployeeCreate, db: Session = Depends(get_db
 )):
+    """
+    Create a new skill-employee relationship.
+    """
     db_skill_employee = models.SkillsEmployees(**skill_employee.model_dump())
     db.add(db_skill_employee)
     db.commit()
@@ -169,6 +213,9 @@ def update_skill_employee(
     skill_employee_update: models.SkillEmployeeUpdate, 
     db: Session = Depends(get_db)
 ):
+    """
+    Update skill-employee relationship.
+    """
     db_skill_employee = db.query(models.SkillsEmployees).filter(
         models.SkillsEmployees.skill_id == skill_id,
         models.SkillsEmployees.employee_id == employee_id
@@ -204,10 +251,29 @@ def update_skill_employee(
         "proficiency": db_skill_employee.proficiency
     }
 
+@app.delete("/skills-employees/{skill_id}/{employee_id}")
+def delete_skill_employee(skill_id: int, employee_id: int, db: Session = Depends(get_db)):
+    """
+    Delete skill-employee relationship.
+    """
+    db_skill_employee = db.query(models.SkillsEmployees).filter(
+        models.SkillsEmployees.skill_id == skill_id,
+        models.SkillsEmployees.employee_id == employee_id
+    ).first()
+    if not db_skill_employee:
+        raise HTTPException(status_code=404, detail="Skill-employee relationship not found")
+    
+    db.delete(db_skill_employee)
+    db.commit()
+    return {"message": "Skill-employee relationship deleted successfully"}
+
 # PROJECT-SKILL-EMPLOYEE
 
 @app.get("/project-skills-employees")
 def read_project_skills_employees(db: Session = Depends(get_db)):
+    """
+    Get all project-skill-employee relationships with project, skill, and employee names.
+    """
     project_skills_employees = db.query(models.ProjectSkillsEmployees).all()
     return [
         {
@@ -227,6 +293,15 @@ def read_project_skills_employees(db: Session = Depends(get_db)):
 
 @app.post("/project-skills-employees")
 def create_project_skill_employee(project_skill_employee: models.ProjectSkillEmployeeCreate, db: Session = Depends(get_db)):
+    """
+    Create a new project-skill-employee relationship.
+    
+    Validations:
+    - Project, skill, and employee must exist
+    - Employee must have the skill assigned
+    - Skill assignment start date cannot be before project start date
+    - Skill assignment end date cannot be after project end date
+    """
     project = db.query(models.Projects).filter(models.Projects.id == project_skill_employee.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -286,6 +361,14 @@ def update_project_skill_employee(
     project_skill_employee_update: models.ProjectSkillEmployeeUpdate,
     db: Session = Depends(get_db)
 ):
+    """
+    Update project-skill-employee relationship.
+    
+    Path parameters:
+    - project_id: ID of the project
+    - skill_id: ID of the skill
+    - employee_id: ID of the employee
+    """
     db_project_skill_employee = db.query(models.ProjectSkillsEmployees).filter(
         models.ProjectSkillsEmployees.project_id == project_id,
         models.ProjectSkillsEmployees.skill_id == skill_id,
@@ -344,6 +427,23 @@ def update_project_skill_employee(
         "skill_end": db_project_skill_employee.skill_end
     }
 
+@app.delete("/project-skills-employees/{project_id}/{skill_id}/{employee_id}")
+def delete_project_skill_employee(project_id: int, skill_id: int, employee_id: int, db: Session = Depends(get_db)):
+    """
+    Delete project-skill-employee relationship.
+    """
+    db_project_skill_employee = db.query(models.ProjectSkillsEmployees).filter(
+        models.ProjectSkillsEmployees.project_id == project_id,
+        models.ProjectSkillsEmployees.skill_id == skill_id,
+        models.ProjectSkillsEmployees.employee_id == employee_id
+    ).first()
+    if not db_project_skill_employee:
+        raise HTTPException(status_code=404, detail="Project-skill-employee relationship not found")
+    
+    db.delete(db_project_skill_employee)
+    db.commit()
+    return {"message": "Project-skill-employee relationship deleted successfully"}
+
 # EMPLOYEE CAPACITIES
 
 @app.get("/employee-capacities")
@@ -352,6 +452,13 @@ def get_employee_get_employee_capacities(
     end: str,
     db: Session = Depends(get_db),
 ):
+    """
+    Get capacities for all employees for a given time period.
+    
+    Query parameters:
+    - start: ISO date string (YYYY-MM-DDTHH:MM:SS)
+    - end: ISO date string (YYYY-MM-DDTHH:MM:SS)
+    """
     try:
         start_date = datetime.fromisoformat(start.replace('Z', '+00:00'))
         end_date = datetime.fromisoformat(end.replace('Z', '+00:00'))
@@ -382,6 +489,7 @@ def get_employee_capacity(
     Get employee capacity for a given time period.
     
     Query parameters:
+    - employee_id: ID of the employee
     - start: ISO date string (YYYY-MM-DDTHH:MM:SS)
     - end: ISO date string (YYYY-MM-DDTHH:MM:SS)
     """
@@ -414,8 +522,11 @@ def get_available_employee_by_skill(
     Get available employees for a given skill and time period.
     
     Query parameters:
+    - skill_id: ID of the skill
     - start: ISO date string (YYYY-MM-DDTHH:MM:SS)
     - end: ISO date string (YYYY-MM-DDTHH:MM:SS)
+    - proficiency: minimum proficiency level (default: 1)
+    - needed_capacity: minimum needed capacity (default: 0.0)
     """
     try:
         start_date = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -447,6 +558,9 @@ def get_available_employee_by_skill(
 
 @app.get("/delete-db")
 def delete_db(db: Session = Depends(get_db)):
+    """
+    Delete all data from the database.
+    """
     db.query(models.ProjectSkillsEmployees).delete()
     db.query(models.SkillsEmployees).delete()
     db.query(models.Projects).delete()
