@@ -59,6 +59,20 @@ class Projects(Base):
                 current_date += timedelta(days=1)
             total_cost += pse.employee.hourly_rate * pse.capacity_on_project * DAILY_HOUR_WORK * (business_days + 1)
         return total_cost
+    
+    @property
+    def employee_actual_cost(self):
+        """Calculate total actual employee cost based on hourly rates and capacity worked on project, considering business days."""
+        total_cost = 0
+        for pse in self.project_skills_employees:
+            business_days = 0
+            current_date = pse.skill_start
+            while current_date <= pse.skill_end:
+                if is_business_day(current_date):
+                    business_days += 1
+                current_date += timedelta(days=1)
+            total_cost += pse.employee.hourly_rate * pse.capacity_worked_on_project * DAILY_HOUR_WORK * (business_days + 1)
+        return total_cost
 
 class Skills(Base):
     __tablename__ = "skills"
@@ -76,6 +90,7 @@ class Employees(Base):
     name = Column(String)
     base_capacity = Column(Float, default=1.0)
     hourly_rate = Column(Float)
+    location = Column(String)
     skills = relationship("SkillsEmployees", back_populates="employee")
     project_skills_employees = relationship("ProjectSkillsEmployees", back_populates="employee")
 
@@ -164,6 +179,7 @@ class ProjectSkillsEmployees(Base):
     capacity_on_project = Column(Float)
     skill_start = Column(DateTime)
     skill_end = Column(DateTime)
+    capacity_worked_on_project = Column(Float, default=0.0)
     
     project = relationship("Projects", back_populates="project_skills_employees")
     skill = relationship("Skills", back_populates="project_skills_employees")
@@ -212,6 +228,7 @@ class EmployeeCreate(BaseModel):
     name: str
     base_capacity: float
     hourly_rate: float
+    location: str
 
 class SkillEmployeeCreate(BaseModel):
     skill_id: int
@@ -302,6 +319,7 @@ class EmployeeUpdate(BaseModel):
     name: str = None
     base_capacity: float = None
     hourly_rate: float = None
+    location: str = None
 
 class SkillEmployeeUpdate(BaseModel):
     proficiency: int = None
@@ -311,6 +329,7 @@ class ProjectSkillEmployeeUpdate(BaseModel):
     capacity_on_project: float = None
     skill_start: datetime = None
     skill_end: datetime = None
+    capacity_worked_on_project: float = None
 
     @field_validator('skill_start', 'skill_end', mode='after')
     @classmethod
@@ -322,6 +341,13 @@ class ProjectSkillEmployeeUpdate(BaseModel):
     def skill_end_must_be_after_start(cls, v, info):
         if v is not None and info.data.get('skill_start') and v <= info.data['skill_start']:
             raise ValueError('skill_end must be after skill_start')
+        return v
+    
+    @field_validator('capacity_worked_on_project')
+    @classmethod
+    def capacity_worked_on_project_must_be_positive(cls, v):
+        if v <= 0 or v > 1:
+            raise ValueError('capacity_worked_on_project must be between 0 and 1')
         return v
     
     @field_validator('capacity_on_project')
@@ -354,6 +380,7 @@ class ProjectResponse(BaseModel):
     fix_cost: float
     revenue: float
     employee_cost: float
+    employee_actual_cost: float
 
     class Config:
         from_attributes = True

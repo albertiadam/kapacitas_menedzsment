@@ -285,6 +285,7 @@ def read_project_skills_employees(db: Session = Depends(get_db)):
             "employee_name": pse.employee.name,
             "needed_proficiency": pse.needed_proficiency,
             "capacity_on_project": pse.capacity_on_project,
+            "capacity_worked_on_project": pse.capacity_worked_on_project,
             "skill_start": pse.skill_start,
             "skill_end": pse.skill_end
         }
