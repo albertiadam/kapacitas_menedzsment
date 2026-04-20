@@ -5,7 +5,7 @@ from backend.database import engine, Base, get_db
 from backend import models
 from datetime import datetime, timedelta
 from typing import List
-from constants import DAILY_HOUR_WORK
+from backend.constants import DAILY_HOUR_WORK
 
 
 Base.metadata.create_all(bind=engine)
