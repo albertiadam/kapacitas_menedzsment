@@ -1,11 +1,11 @@
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.database import engine, Base, get_db
 from backend import models
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
+from constants import DAILY_HOUR_WORK
 
 
 Base.metadata.create_all(bind=engine)
@@ -546,22 +546,103 @@ def get_available_employee_by_skill(
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date must be before end date")
 
-    employees = db.query(models.Employees).join(models.SkillsEmployees).filter(
+    skill_employees = db.query(models.SkillsEmployees).join(models.Employees).filter(
         models.SkillsEmployees.skill_id == skill_id,
         models.SkillsEmployees.proficiency >= proficiency
     ).all()
     
     available_employees = []
-    for employee in employees:
+    for skill_employee in skill_employees:
+        employee = skill_employee.employee
         capacity_info = employee.get_capacity_for_period(start_date, end_date, db)
-        if capacity_info['available_capacity'] > needed_capacity:
-            available_employees.append(dict(availability='fully', **employee.to_dict(),**capacity_info))
+        employee_data = {
+            'proficiency': skill_employee.proficiency,
+            **employee.to_dict(),
+            **capacity_info,
+        }
+        if capacity_info['available_capacity'] >= needed_capacity:
+            employee_data['availability'] = 'fully'
         elif (employee.base_capacity - capacity_info['allocated_capacity']) > needed_capacity:
-            available_employees.append(dict(availability='partially', **employee.to_dict(),**capacity_info))
+            employee_data['availability'] = 'partially'
         else:
-            available_employees.append(dict(availability='not', **employee.to_dict(),**capacity_info))
+            employee_data['availability'] = 'not'
+        available_employees.append(employee_data)
     
     return available_employees
+
+
+@app.post("/suggest-team")
+def suggest_team(request: models.SuggestTeamRequest, db: Session = Depends(get_db)):
+    """Suggest a team based on skill-specific date ranges and user preference."""
+    team = []
+    skill_lookup = {skill.id: skill.name for skill in db.query(models.Skills).all()}
+
+    assigned_capacity: dict[int, float] = {}
+
+    for requirement in request.skills:
+        candidates = get_available_employee_by_skill(
+            skill_id=requirement.skill_id,
+            start=requirement.start.isoformat(),
+            end=requirement.end.isoformat(),
+            proficiency=requirement.needed_proficiency,
+            needed_capacity=requirement.needed_capacity,
+            db=db,
+        )
+
+        candidate_options = []
+        for candidate in candidates:
+            if candidate.get('availability') != 'fully':
+                continue
+
+            used_capacity = assigned_capacity.get(candidate['id'], 0.0)
+            effective_available = candidate['available_capacity'] - used_capacity
+            if effective_available >= requirement.needed_capacity:
+                candidate_options.append((candidate, effective_available))
+
+        if not candidate_options:
+            skill_name = skill_lookup.get(requirement.skill_id, f"skill {requirement.skill_id}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No fully available employee found for skill {skill_name} with required proficiency and capacity"
+            )
+
+        business_days = count_business_days(requirement.start, requirement.end)
+
+        def candidate_cost(candidate):
+            return candidate['hourly_rate'] * requirement.needed_capacity * DAILY_HOUR_WORK * (business_days + 1)
+
+        if request.preference == 'cost':
+            best_candidate, best_effective = min(
+                candidate_options,
+                key=lambda item: (candidate_cost(item[0]), item[1])
+            )
+        else:
+            best_candidate, best_effective = min(
+                candidate_options,
+                key=lambda item: (item[1], candidate_cost(item[0]))
+            )
+
+        assigned_capacity[best_candidate['id']] = assigned_capacity.get(best_candidate['id'], 0.0) + requirement.needed_capacity
+
+        team.append({
+            'skill_id': requirement.skill_id,
+            'skill_name': skill_lookup.get(requirement.skill_id, None),
+            'employee_id': best_candidate['id'],
+            'employee_name': best_candidate['name'],
+            'proficiency': best_candidate['proficiency'],
+            'needed_proficiency': requirement.needed_proficiency,
+            'needed_capacity': requirement.needed_capacity,
+            'available_capacity': best_effective,
+            'hourly_rate': best_candidate['hourly_rate'],
+            'estimated_cost': candidate_cost(best_candidate),
+            'start': requirement.start,
+            'end': requirement.end,
+        })
+
+    return {
+        'preference': request.preference,
+        'team': team,
+    }
 
 # GENERAL
 
@@ -579,3 +660,11 @@ def delete_db(db: Session = Depends(get_db)):
     return {"message": "Database cleared"}
 
 
+def count_business_days(start_date: datetime, end_date: datetime) -> int:
+    days = 0
+    current_date = start_date
+    while current_date <= end_date:
+        if current_date.weekday() < 5:
+            days += 1
+        current_date += timedelta(days=1)
+    return days

@@ -1,12 +1,11 @@
-from sqlalchemy import Column,Integer,String,Float,Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column,Integer,String,Float, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship, Session
 from .database import Base
 from datetime import datetime, timedelta, timezone
-import calendar
 from pydantic import BaseModel, field_validator
 from .constants import DAILY_HOUR_WORK
-import calendar
 import enum
+from typing import List
 
 # Functions
 def is_business_day(date: datetime) -> bool:
@@ -384,3 +383,29 @@ class ProjectResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class SkillSuggestion(BaseModel):
+    skill_id: int
+    start: datetime
+    end: datetime
+    needed_proficiency: int = 1
+    needed_capacity: float = 0.0
+
+    @field_validator('end')
+    @classmethod
+    def validate_dates(cls, end, info):
+        start = info.data.get('start')
+        if start is not None and end <= start:
+            raise ValueError('skill start must be before skill end')
+        return end
+
+class SuggestTeamRequest(BaseModel):
+    preference: str = 'cost'
+    skills: List[SkillSuggestion]
+
+    @field_validator('preference')
+    @classmethod
+    def validate_preference(cls, preference):
+        if preference not in ('cost', 'capacity'):
+            raise ValueError('preference must be cost or capacity')
+        return preference
