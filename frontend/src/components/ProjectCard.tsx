@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { Project, ProjectStatus, ProjectSkill } from '@/data/mockData';
+import { useRef, useState } from 'react';
+import type {
+  Project, ProjectSkillEmployee, ProjectStatus,
+  Employee, SkillEmployee, Skill,
+  SuggestTeamResultItem, EmployeeAvailability,
+} from '@/types';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ProgressBar } from '@/components/ProgressBar';
-import { ChevronDown, ChevronUp, User, Pencil, Check, X, Plus, Trash2, Lock, Unlock, Calculator, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Check, X, Plus, Trash2, Wand2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,138 +18,209 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import type {DragEndEvent} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { suggestTeam } from '@/api/projects';
+import { useAvailableEmployeesBySkill } from '@/hooks/queries';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('hu-HU').format(value) + ' HUF';
 }
 
-type AssignPreference = 'cost' | 'capacity';
+function toDateStr(d: Date | string | undefined | null): string {
+  if (!d) return '';
+  return String(d).slice(0, 10);
+}
 
-export function ProjectCard({ project }: { project: Project }) {
+function safeParseISO(d: Date | string | undefined | null): Date | undefined {
+  const s = toDateStr(d);
+  return s ? parseISO(s) : undefined;
+}
+
+function availColor(a: EmployeeAvailability['availability']) {
+  if (a === 'fully') return 'text-green-500';
+  if (a === 'partially') return 'text-yellow-500';
+  return 'text-red-500';
+}
+
+const STATUSES: { value: ProjectStatus; label: string }[] = [
+  { value: 'planned', label: 'Planned' },
+  { value: 'ongoing', label: 'Ongoing' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'on_hold', label: 'On Hold' },
+];
+
+interface Props {
+  project: Project;
+  projectSkillEmployees: ProjectSkillEmployee[];
+}
+
+type PendingRow = {
+  localId: number;
+  skillId: string;
+  proficiency: string;
+  capacity: string;
+  start: string;
+  end: string;
+  selectedEmployeeId: string;
+  suggestion: SuggestTeamResultItem | null;
+  rowError: string | null;
+};
+
+export function ProjectCard({ project, projectSkillEmployees }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDesc, setEditDesc] = useState(project.description);
-  const [editStart, setEditStart] = useState<Date | undefined>(project.startDate ? parseISO(project.startDate) : undefined);
-  const [editEnd, setEditEnd] = useState<Date | undefined>(project.endDate ? parseISO(project.endDate) : undefined);
-  const [editFixedCost, setEditFixedCost] = useState(String(project.fixedCost ?? ''));
+  const [editStart, setEditStart] = useState<Date | undefined>(safeParseISO(project.start));
+  const [editEnd, setEditEnd] = useState<Date | undefined>(safeParseISO(project.end));
+  const [editFixCost, setEditFixCost] = useState(String(project.fix_cost ?? ''));
   const [editRevenue, setEditRevenue] = useState(String(project.revenue ?? ''));
-  const [addingSkill, setAddingSkill] = useState(false);
-  const [newSkillId, setNewSkillId] = useState('');
-  const [newSkillLevel, setNewSkillLevel] = useState('1');
-  const [newSkillCapacity, setNewSkillCapacity] = useState('');
-  const [newSkillStart, setNewSkillStart] = useState('');
-  const [newSkillEnd, setNewSkillEnd] = useState('');
-  const [capacityError, setCapacityError] = useState('');
-  // Preference selectors for auto-assignment
-  const [bulkPreference, setBulkPreference] = useState<AssignPreference | ''>('');
-  const [rowPreference, setRowPreference] = useState<Record<string, AssignPreference>>({});
-  const { isPM } = useAuth();
+
+  const [showBatch, setShowBatch] = useState(false);
+  const [pendingRows, setPendingRows] = useState<PendingRow[]>([]);
+  const [preference, setPreference] = useState<'cost' | 'capacity'>('cost');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
+  const [savingRows, setSavingRows] = useState<Set<number>>(new Set());
+  const nextRowId = useRef(0);
+
+  const { isPM, isManager } = useAuth();
   const {
-    updateProjectStatus, updateProject, skills: globalSkills,
-    addProjectSkill, removeProjectSkill, updateProjectSkill,
-    reorderProjectSkills, autoAssignSkill, autoAssignAllEmptySkills,
-    employees,
+    updateProject, deleteProject, deleteProjectSkillEmployee, updateProjectSkillEmployee,
+    createProjectSkillEmployee, skills, employees, employeeSkills,
   } = useData();
 
-  const statuses: ProjectStatus[] = ['Planned', 'Ongoing', 'Completed', 'Cancelled', 'On Hold'];
-
-  const hasAssignedSkills = project.skills.some(s => s.assignedEmployeeId);
-  const showPersonColumn = !(project.status === 'Planned' && !hasAssignedSkills);
-
-  const newSkillAllFilled = newSkillId && newSkillLevel && newSkillStart && newSkillEnd && newSkillCapacity !== '';
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const ids = project.skills.map(s => s.id);
-    const oldIndex = ids.indexOf(String(active.id));
-    const newIndex = ids.indexOf(String(over.id));
-    if (oldIndex < 0 || newIndex < 0) return;
-    const reordered = arrayMove(ids, oldIndex, newIndex);
-    reorderProjectSkills(project.id, reordered);
-  };
-
-  const handleSaveEdit = () => {
+  const handleSave = () => {
     updateProject(project.id, {
       description: editDesc,
-      startDate: editStart ? format(editStart, 'yyyy-MM-dd') : project.startDate,
-      endDate: editEnd ? format(editEnd, 'yyyy-MM-dd') : project.endDate,
-      fixedCost: editFixedCost === '' ? undefined : Number(editFixedCost),
+      start: editStart ? format(editStart, 'yyyy-MM-dd') : toDateStr(project.start),
+      end: editEnd ? format(editEnd, 'yyyy-MM-dd') : toDateStr(project.end),
+      fix_cost: editFixCost === '' ? undefined : Number(editFixCost),
       revenue: editRevenue === '' ? undefined : Number(editRevenue),
     });
     setEditing(false);
   };
 
-  const handleAddSkill = () => {
-    if (!newSkillAllFilled) return;
-    const cap = Number(newSkillCapacity);
-    if (Number.isNaN(cap) || cap < 0 || cap > 1) {
-      setCapacityError('Capacity on project must be between 0 and 1');
-      return;
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditDesc(project.description);
+    setEditStart(safeParseISO(project.start));
+    setEditEnd(safeParseISO(project.end));
+    setEditFixCost(String(project.fix_cost ?? ''));
+    setEditRevenue(String(project.revenue ?? ''));
+  };
+
+  const makeEmptyRow = (): PendingRow => ({
+    localId: nextRowId.current++,
+    skillId: '',
+    proficiency: '1',
+    capacity: '',
+    start: toDateStr(project.start),
+    end: toDateStr(project.end),
+    selectedEmployeeId: '',
+    suggestion: null,
+    rowError: null,
+  });
+
+  const addRow = () => setPendingRows(prev => [...prev, makeEmptyRow()]);
+
+  const updateRow = <K extends keyof PendingRow>(localId: number, field: K, value: PendingRow[K]) => {
+    setPendingRows(prev =>
+      prev.map(r => {
+        if (r.localId !== localId) return r;
+        const resetEmployee = field === 'skillId' || field === 'proficiency';
+        return {
+          ...r,
+          [field]: value,
+          suggestion: null,
+          rowError: null,
+          ...(resetEmployee ? { selectedEmployeeId: '' } : {}),
+        };
+      }),
+    );
+  };
+
+  const removeRow = (localId: number) => setPendingRows(prev => prev.filter(r => r.localId !== localId));
+
+  const handleSuggest = async () => {
+    setSuggestError('');
+    setPendingRows(prev => prev.map(r => ({ ...r, suggestion: null, rowError: null })));
+
+    for (const row of pendingRows) {
+      if (!row.skillId) { setSuggestError('Each row must have a skill selected'); return; }
+      const cap = Number(row.capacity);
+      if (Number.isNaN(cap) || cap <= 0 || cap > 1) {
+        setSuggestError('Each row needs a capacity between 0 and 1');
+        return;
+      }
+      if (!row.start || !row.end) { setSuggestError('Each row needs start and end dates'); return; }
+      if (row.end <= row.start) { setSuggestError('End date must be after start date in every row'); return; }
     }
-    const skill = globalSkills.find(s => s.id === newSkillId);
-    if (!skill) return;
-    addProjectSkill(project.id, {
-      skillId: skill.id,
-      skillName: skill.name,
-      level: Number(newSkillLevel),
-      duration: Math.max(1, Math.round(cap * 20)), // legacy compat
-      capacityOnProject: cap,
-      startDate: newSkillStart,
-      endDate: newSkillEnd,
-      assignedEmployeeId: null,
-      assignedEmployeeName: null,
-      fixed: false,
-    });
-    setNewSkillId('');
-    setNewSkillLevel('1');
-    setNewSkillCapacity('');
-    setNewSkillStart('');
-    setNewSkillEnd('');
-    setCapacityError('');
-    setAddingSkill(false);
+
+    setSuggesting(true);
+    try {
+      const result = await suggestTeam({
+        preference,
+        skills: pendingRows.map(r => ({
+          skill_id: Number(r.skillId),
+          start: `${r.start}T00:00:00`,
+          end: `${r.end}T00:00:00`,
+          needed_proficiency: Number(r.proficiency),
+          needed_capacity: Number(r.capacity),
+        })),
+      });
+
+      setPendingRows(prev =>
+        prev.map((r, i) => ({
+          ...r,
+          suggestion: result.team[i] ?? null,
+          selectedEmployeeId: result.team[i] ? String(result.team[i].employee_id) : r.selectedEmployeeId,
+        })),
+      );
+    } catch (err: any) {
+      setSuggestError(err.message || 'Suggestion failed');
+    } finally {
+      setSuggesting(false);
+    }
   };
 
-  const getEmployeeAvailability = (emp: typeof employees[0], skill: ProjectSkill): 'available' | 'overtime' => {
-    const hasSkill = emp.skills.find(s => s.skillId === skill.skillId && s.level >= skill.level);
-    if (!hasSkill) return 'overtime';
-    const usedBefore = emp.plannedCapacity + emp.allocatedCapacity;
-    const usedAfter = usedBefore + skill.duration;
-    if (usedBefore >= emp.totalCapacity || usedAfter > emp.totalCapacity) return 'overtime';
-    return 'available';
+  const handleSaveRow = async (localId: number) => {
+    const row = pendingRows.find(r => r.localId === localId);
+    if (!row?.selectedEmployeeId) return;
+
+    setSavingRows(prev => new Set(prev).add(localId));
+    try {
+      const start = row.suggestion ? toDateStr(row.suggestion.start) : row.start;
+      const end = row.suggestion ? toDateStr(row.suggestion.end) : row.end;
+      await createProjectSkillEmployee({
+        project_id: project.id,
+        skill_id: Number(row.skillId),
+        employee_id: Number(row.selectedEmployeeId),
+        needed_proficiency: Number(row.proficiency),
+        capacity_on_project: Number(row.capacity),
+        skill_start: start,
+        skill_end: end,
+      });
+      setPendingRows(prev => prev.filter(r => r.localId !== localId));
+    } catch (err: any) {
+      setPendingRows(prev =>
+        prev.map(r =>
+          r.localId === localId ? { ...r, rowError: err.message || 'Save failed' } : r,
+        ),
+      );
+    } finally {
+      setSavingRows(prev => {
+        const next = new Set(prev);
+        next.delete(localId);
+        return next;
+      });
+    }
   };
 
-  const isSkillRowComplete = (skill: ProjectSkill) =>
-    Boolean(skill.skillId && skill.level && skill.startDate && skill.endDate && typeof skill.capacityOnProject === 'number');
-
-  const emptySkillCount = project.skills.filter(s => !s.assignedEmployeeId && !s.fixed).length;
-
-  // Grid columns: Drag | Skill | Level | Interval | Cap. on proj. | (Assigned) | Actions
-  const gridCols = showPersonColumn
-    ? '24px 1fr 50px 1fr 110px 1fr 90px'
-    : '24px 1fr 50px 1fr 110px 90px';
+  const closeBatch = () => {
+    setShowBatch(false);
+    setPendingRows([]);
+    setSuggestError('');
+  };
 
   return (
     <div className="border border-border rounded-lg bg-card transition-all duration-200 hover:border-primary/30">
@@ -155,48 +229,78 @@ export function ProjectCard({ project }: { project: Project }) {
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
       >
         <span className="font-mono text-xs text-primary bg-primary/10 px-2 py-0.5 rounded shrink-0">
-          {project.shortName}
+          {project.short_name}
         </span>
         <span className="text-sm font-medium text-foreground truncate flex-1">{project.name}</span>
         <StatusBadge status={project.status} />
-        <span className="text-xs text-muted-foreground font-mono hidden lg:inline border-l border-border pl-3">{project.startDate}</span>
-        <div className="hidden sm:block border-l border-border pl-3"><ProgressBar value={project.progress} /></div>
-        <span className="text-xs text-muted-foreground font-mono hidden lg:inline border-l border-border pl-3">{project.endDate}</span>
-        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+        <span className="text-xs text-muted-foreground font-mono hidden lg:inline border-l border-border pl-3">
+          {toDateStr(project.start)}
+        </span>
+        <span className="text-xs text-muted-foreground font-mono hidden lg:inline border-l border-border pl-3">
+          {toDateStr(project.end)}
+        </span>
+        {isManager && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); deleteProject(project.id); }}
+            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+            aria-label="Delete project"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </span>
+        )}
+        {expanded ? (
+          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+        )}
       </button>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-border animate-fade-in">
+          {/* Details header */}
           <div className="flex items-center justify-between mt-4 mb-3">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Details
+            </h3>
             <div className="flex gap-2">
               {isPM && (
-                <Select value={project.status} onValueChange={(v) => updateProjectStatus(project.id, v as ProjectStatus)}>
+                <Select
+                  value={project.status}
+                  onValueChange={v => updateProject(project.id, { status: v as ProjectStatus })}
+                >
                   <SelectTrigger className="w-32 h-7 text-xs bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {STATUSES.map(s => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}
               {!editing ? (
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEditing(true)}
+                >
                   <Pencil className="w-3 h-3 mr-1" /> Edit
                 </Button>
               ) : (
                 <div className="flex gap-1">
-                  <Button variant="default" size="sm" className="h-7 text-xs" onClick={handleSaveEdit}>
+                  <Button variant="default" size="sm" className="h-7 text-xs" onClick={handleSave}>
                     <Check className="w-3 h-3 mr-1" /> Save
                   </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
-                    setEditing(false);
-                    setEditDesc(project.description);
-                    setEditStart(project.startDate ? parseISO(project.startDate) : undefined);
-                    setEditEnd(project.endDate ? parseISO(project.endDate) : undefined);
-                    setEditFixedCost(String(project.fixedCost ?? ''));
-                    setEditRevenue(String(project.revenue ?? ''));
-                  }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleCancelEdit}
+                  >
                     <X className="w-3 h-3 mr-1" /> Cancel
                   </Button>
                 </div>
@@ -204,197 +308,198 @@ export function ProjectCard({ project }: { project: Project }) {
             </div>
           </div>
 
+          {/* Details grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {editing ? (
               <div className="md:col-span-2 lg:col-span-3">
                 <p className="text-xs text-muted-foreground mb-1">Description</p>
-                <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} className="bg-background text-sm" rows={2} />
+                <Textarea
+                  value={editDesc}
+                  onChange={e => setEditDesc(e.target.value)}
+                  className="bg-background text-sm"
+                  rows={2}
+                />
               </div>
             ) : (
-              <DetailItem label="Description" value={project.description} />
+              <DetailItem label="Description" value={project.description || '—'} />
             )}
+
             {editing ? (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Start Date</p>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full h-8 text-xs justify-start", !editStart && "text-muted-foreground")}>
-                      <CalendarIcon className="w-3 h-3 mr-1" />
-                      {editStart ? format(editStart, 'yyyy-MM-dd') : 'Pick date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={editStart} onSelect={setEditStart} className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <DatePickerField label="Start Date" value={editStart} onChange={setEditStart} />
             ) : (
-              <DetailItem label="Start Date" value={project.startDate} />
+              <DetailItem label="Start Date" value={toDateStr(project.start)} />
             )}
+
             {editing ? (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">End Date</p>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full h-8 text-xs justify-start", !editEnd && "text-muted-foreground")}>
-                      <CalendarIcon className="w-3 h-3 mr-1" />
-                      {editEnd ? format(editEnd, 'yyyy-MM-dd') : 'Pick date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={editEnd} onSelect={setEditEnd} className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <DatePickerField label="End Date" value={editEnd} onChange={setEditEnd} />
             ) : (
-              <DetailItem label="End Date" value={project.endDate} />
+              <DetailItem label="End Date" value={toDateStr(project.end)} />
             )}
+
             {editing ? (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Fixed Cost (HUF)</p>
-                <Input type="number" value={editFixedCost} onChange={e => setEditFixedCost(e.target.value)} className="bg-background h-8 text-sm" />
+                <Input
+                  type="number"
+                  value={editFixCost}
+                  onChange={e => setEditFixCost(e.target.value)}
+                  className="bg-background h-8 text-sm"
+                />
               </div>
             ) : (
-              <DetailItem label="Fixed Cost" value={typeof project.fixedCost === 'number' ? formatCurrency(project.fixedCost) : '—'} />
+              <DetailItem
+                label="Fixed Cost"
+                value={typeof project.fix_cost === 'number' ? formatCurrency(project.fix_cost) : '—'}
+              />
             )}
+
             {editing ? (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Revenue (HUF)</p>
-                <Input type="number" value={editRevenue} onChange={e => setEditRevenue(e.target.value)} className="bg-background h-8 text-sm" />
+                <Input
+                  type="number"
+                  value={editRevenue}
+                  onChange={e => setEditRevenue(e.target.value)}
+                  className="bg-background h-8 text-sm"
+                />
               </div>
             ) : (
-              <DetailItem label="Revenue" value={typeof project.revenue === 'number' ? formatCurrency(project.revenue) : '—'} />
+              <DetailItem
+                label="Revenue"
+                value={typeof project.revenue === 'number' ? formatCurrency(project.revenue) : '—'}
+              />
             )}
+
+            <DetailItem
+              label="Employee Cost"
+              value={typeof project.employee_cost === 'number' ? formatCurrency(project.employee_cost) : '—'}
+            />
+            <DetailItem
+              label="Actual Employee Cost"
+              value={typeof project.employee_actual_cost === 'number' ? formatCurrency(project.employee_actual_cost) : '—'}
+            />
           </div>
 
-          {/* Skills section */}
+          {/* Skill assignments */}
           <div className="mt-5">
-            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Required Skills</h4>
-              <div className="flex gap-2 items-center flex-wrap">
-                {isPM && emptySkillCount > 0 && (
-                  <>
-                    <Select value={bulkPreference} onValueChange={(v) => setBulkPreference(v as AssignPreference)}>
-                      <SelectTrigger className="w-44 h-7 text-xs bg-background">
-                        <SelectValue placeholder="Optimization preference…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cost">Minimize Cost</SelectItem>
-                        <SelectItem value="capacity">Maximize Capacity</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={!bulkPreference}
-                      onClick={() => bulkPreference && autoAssignAllEmptySkills(project.id, bulkPreference)}
-                      title={!bulkPreference ? 'Select an optimization preference first' : 'Auto-assign all empty skills'}
-                    >
-                      <Calculator className="w-3 h-3 mr-1" /> Calculate
-                    </Button>
-                  </>
-                )}
-                {isPM && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddingSkill(!addingSkill)}>
-                    <Plus className="w-3 h-3 mr-1" /> Add Skill
-                  </Button>
-                )}
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Skill Assignments
+              </h4>
+              {isPM && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    if (!showBatch) {
+                      setShowBatch(true);
+                      if (pendingRows.length === 0) setPendingRows([makeEmptyRow()]);
+                    } else {
+                      closeBatch();
+                    }
+                  }}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Assignments
+                </Button>
+              )}
             </div>
 
-            {/* Skill list header */}
-            {project.skills.length > 0 && (
-              <div className="grid gap-3 text-xs text-muted-foreground font-medium uppercase tracking-wider px-3 py-1.5 border-b border-border mb-1"
-                style={{ gridTemplateColumns: gridCols }}>
-                <span></span>
+            {projectSkillEmployees.length > 0 && (
+              <div
+                className="grid gap-3 text-xs text-muted-foreground font-medium uppercase tracking-wider px-3 py-1.5 border-b border-border mb-1"
+                style={{ gridTemplateColumns: '1fr 50px 1fr 90px 1fr 40px' }}
+              >
                 <span>Skill</span>
-                <span>Level</span>
+                <span>Lv.</span>
                 <span>Interval</span>
-                <span>Cap. on proj.</span>
-                {showPersonColumn && <span>Assigned</span>}
-                <span></span>
+                <span>Cap.</span>
+                <span>Assigned</span>
+                <span />
               </div>
             )}
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={project.skills.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                  {project.skills.map((skill) => (
-                    <SortableSkillRow
-                      key={skill.id}
-                      skill={skill}
-                      gridCols={gridCols}
-                      showPersonColumn={showPersonColumn}
-                      isPM={isPM}
-                      employees={employees}
-                      rowComplete={isSkillRowComplete(skill)}
-                      getEmployeeAvailability={getEmployeeAvailability}
-                      onAssignChange={(empId) => {
-                        const emp = employees.find(e => e.id === empId);
-                        updateProjectSkill(project.id, skill.id, {
-                          assignedEmployeeId: empId === '_none' ? null : empId,
-                          assignedEmployeeName: empId === '_none' ? null : emp?.name || null,
-                        });
-                      }}
-                      onToggleFixed={() => updateProjectSkill(project.id, skill.id, { fixed: !skill.fixed })}
-                      onRemove={() => removeProjectSkill(project.id, skill.id)}
-                      preference={rowPreference[skill.id] ?? ''}
-                      onPreferenceChange={(p) => setRowPreference(prev => ({ ...prev, [skill.id]: p }))}
-                      onAutoAssign={() => {
-                        const pref = rowPreference[skill.id];
-                        if (!pref) return;
-                        autoAssignSkill(project.id, skill.id, pref);
-                      }}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <div className="space-y-1">
+              {projectSkillEmployees.map(pse => (
+                <PseRow
+                  key={pse.id}
+                  pse={pse}
+                  isPM={isPM}
+                  employees={employees}
+                  employeeSkills={employeeSkills}
+                  onReassign={empId => updateProjectSkillEmployee(pse.id, { employee_id: empId })}
+                  onRemove={() => deleteProjectSkillEmployee(pse.id)}
+                />
+              ))}
+            </div>
 
-            {/* Add skill form */}
-            {addingSkill && isPM && (
-              <div className="mt-2 p-3 border border-border rounded-md bg-background animate-fade-in">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                  <Select value={newSkillId} onValueChange={setNewSkillId}>
-                    <SelectTrigger className="h-8 text-xs bg-card">
-                      <SelectValue placeholder="Select skill..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {globalSkills.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={newSkillLevel} onValueChange={setNewSkillLevel}>
-                    <SelectTrigger className="h-8 text-xs bg-card">
+            {/* Batch assignment panel */}
+            {showBatch && isPM && (
+              <div className="mt-3 p-3 border border-primary/30 rounded-md bg-background animate-fade-in space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Pending assignments
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={closeBatch}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+
+                {pendingRows.map((row, idx) => (
+                  <PendingRowForm
+                    key={row.localId}
+                    row={row}
+                    index={idx}
+                    skills={skills}
+                    isSaving={savingRows.has(row.localId)}
+                    onUpdate={(field, value) => updateRow(row.localId, field, value as any)}
+                    onRemove={() => removeRow(row.localId)}
+                    onSave={() => handleSaveRow(row.localId)}
+                  />
+                ))}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                  onClick={addRow}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Row
+                </Button>
+
+                <div className="flex items-center gap-2 pt-1 border-t border-border">
+                  <Select
+                    value={preference}
+                    onValueChange={v => setPreference(v as 'cost' | 'capacity')}
+                  >
+                    <SelectTrigger className="h-8 text-xs bg-card w-40">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[1, 2, 3].map(l => <SelectItem key={l} value={String(l)}>Level {l}</SelectItem>)}
+                      <SelectItem value="cost">Prefer cheapest</SelectItem>
+                      <SelectItem value="capacity">Prefer available</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    placeholder="Cap. 0–1"
-                    value={newSkillCapacity}
-                    onChange={e => { setNewSkillCapacity(e.target.value); setCapacityError(''); }}
-                    className="h-8 text-xs bg-card"
-                  />
-                  <Input type="date" placeholder="Start" value={newSkillStart} onChange={e => setNewSkillStart(e.target.value)} className="h-8 text-xs bg-card" />
-                  <Input type="date" placeholder="End" value={newSkillEnd} onChange={e => setNewSkillEnd(e.target.value)} className="h-8 text-xs bg-card" />
+
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs flex-1"
+                    onClick={handleSuggest}
+                    disabled={suggesting || pendingRows.length === 0}
+                  >
+                    <Wand2 className="w-3 h-3 mr-1" />
+                    {suggesting ? 'Suggesting…' : 'Suggest Team'}
+                  </Button>
                 </div>
-                {capacityError && <p className="text-xs text-destructive mt-1">{capacityError}</p>}
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" className="h-7 text-xs" onClick={handleAddSkill} disabled={!newSkillAllFilled}>Add</Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAddingSkill(false)}>Cancel</Button>
-                </div>
+
+                {suggestError && (
+                  <p className="text-xs text-destructive">{suggestError}</p>
+                )}
               </div>
             )}
 
-            {project.skills.length === 0 && !addingSkill && (
-              <p className="text-xs text-muted-foreground italic py-2">No skills assigned yet</p>
+            {projectSkillEmployees.length === 0 && !showBatch && (
+              <p className="text-xs text-muted-foreground italic py-2">No assignments yet</p>
             )}
           </div>
         </div>
@@ -403,131 +508,288 @@ export function ProjectCard({ project }: { project: Project }) {
   );
 }
 
-interface SortableSkillRowProps {
-  skill: ProjectSkill;
-  gridCols: string;
-  showPersonColumn: boolean;
-  isPM: boolean;
-  employees: ReturnType<typeof useData>['employees'];
-  rowComplete: boolean;
-  getEmployeeAvailability: (emp: ReturnType<typeof useData>['employees'][0], skill: ProjectSkill) => 'available' | 'overtime';
-  onAssignChange: (empId: string) => void;
-  onToggleFixed: () => void;
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+interface PendingRowFormProps {
+  row: {
+    localId: number;
+    skillId: string;
+    proficiency: string;
+    capacity: string;
+    start: string;
+    end: string;
+    selectedEmployeeId: string;
+    suggestion: SuggestTeamResultItem | null;
+    rowError: string | null;
+  };
+  index: number;
+  skills: Skill[];
+  isSaving: boolean;
+  onUpdate: (field: keyof PendingRow, value: string) => void;
   onRemove: () => void;
-  preference: AssignPreference | '';
-  onPreferenceChange: (p: AssignPreference) => void;
-  onAutoAssign: () => void;
+  onSave: () => void;
 }
 
-function SortableSkillRow({
-  skill, gridCols, showPersonColumn, isPM, employees, rowComplete,
-  getEmployeeAvailability, onAssignChange, onToggleFixed, onRemove,
-  preference, onPreferenceChange, onAutoAssign,
-}: SortableSkillRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: skill.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-  };
+function PendingRowForm({ row, index, skills, isSaving, onUpdate, onRemove, onSave }: PendingRowFormProps) {
+  const cap = Number(row.capacity);
+  const { data: available, isFetching } = useAvailableEmployeesBySkill({
+    skill_id: row.skillId ? Number(row.skillId) : null,
+    start: row.start,
+    end: row.end,
+    proficiency: Number(row.proficiency),
+    needed_capacity: cap > 0 ? cap : 0,
+  });
 
-  const isEmpty = !skill.assignedEmployeeId && !skill.fixed;
+  const suggestion = row.suggestion;
+  const canSave = !!row.selectedEmployeeId;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{ ...style, gridTemplateColumns: gridCols }}
-      className="grid gap-3 items-center bg-background rounded-md px-3 py-2 text-sm"
-    >
-      <button
-        type="button"
-        className="flex items-center justify-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-        aria-label="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="w-4 h-4" />
-      </button>
-      <span className="font-medium text-foreground">{skill.skillName}</span>
-      <Badge variant="outline" className="text-xs font-mono w-fit">Lv.{skill.level}</Badge>
-      <span className="text-xs text-muted-foreground font-mono">{skill.startDate} – {skill.endDate}</span>
-      <span className="text-xs text-muted-foreground font-mono">
-        {typeof skill.capacityOnProject === 'number' ? skill.capacityOnProject.toFixed(2) : '—'}
-      </span>
-      {showPersonColumn && (
-        <div className="flex items-center gap-1">
-          {isPM ? (
-            <Select
-              value={skill.assignedEmployeeId || '_none'}
-              onValueChange={onAssignChange}
-              disabled={!rowComplete}
-            >
-              <SelectTrigger className={cn("h-7 text-xs bg-card w-full", !rowComplete && "opacity-50 cursor-not-allowed")}>
-                <SelectValue placeholder="Assign..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">Unassigned</SelectItem>
-                {employees.map(emp => {
-                  const availability = getEmployeeAvailability(emp, skill);
-                  return (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={cn(
-                          "w-2 h-2 rounded-full shrink-0",
-                          availability === 'available' ? 'bg-primary' : 'bg-destructive'
-                        )} />
-                        {emp.name}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          ) : skill.assignedEmployeeName ? (
-            <span className="flex items-center gap-1 text-xs text-primary">
-              <User className="w-3 h-3" />
-              {skill.assignedEmployeeName}
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground italic">Unassigned</span>
-          )}
-        </div>
-      )}
-      <div className="flex gap-1 justify-end">
-        {isPM && isEmpty && rowComplete && (
-          <>
-            <Select value={preference} onValueChange={(v) => onPreferenceChange(v as AssignPreference)}>
-              <SelectTrigger className="h-6 text-xs bg-card w-[110px] px-2">
-                <SelectValue placeholder="Pref…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cost">Min Cost</SelectItem>
-                <SelectItem value="capacity">Max Capacity</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              disabled={!preference}
-              onClick={onAutoAssign}
-              title={preference ? 'Auto-assign optimal employee' : 'Select preference first'}
-            >
-              <Calculator className="w-3 h-3" />
-            </Button>
-          </>
-        )}
-        {isPM && (
-          <>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onToggleFixed}>
-              {skill.fixed ? <Lock className="w-3 h-3 text-warning" /> : <Unlock className="w-3 h-3 text-muted-foreground" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </>
+    <div className="p-2.5 border border-border rounded bg-card space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">#{index + 1}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+        <Select
+          value={row.skillId}
+          onValueChange={v => onUpdate('skillId', v)}
+        >
+          <SelectTrigger className="h-8 text-xs bg-background">
+            <SelectValue placeholder="Select skill..." />
+          </SelectTrigger>
+          <SelectContent>
+            {skills.map(s => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={row.proficiency}
+          onValueChange={v => onUpdate('proficiency', v)}
+        >
+          <SelectTrigger className="h-8 text-xs bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3].map(l => (
+              <SelectItem key={l} value={String(l)}>
+                Level {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Input
+          type="number"
+          step="0.01"
+          min="0.01"
+          max="1"
+          placeholder="Cap. 0–1"
+          value={row.capacity}
+          onChange={e => onUpdate('capacity', e.target.value)}
+          className="h-8 text-xs bg-background"
+        />
+
+        <Input
+          type="date"
+          value={row.start}
+          onChange={e => onUpdate('start', e.target.value)}
+          className="h-8 text-xs bg-background"
+        />
+
+        <Input
+          type="date"
+          value={row.end}
+          onChange={e => onUpdate('end', e.target.value)}
+          className="h-8 text-xs bg-background"
+        />
+
+        {/* Employee selector with availability colors */}
+        {row.skillId && row.start && row.end && row.start < row.end && (
+          <Select
+            value={row.selectedEmployeeId}
+            onValueChange={v => onUpdate('selectedEmployeeId', v)}
+            disabled={isFetching}
+          >
+            <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectValue placeholder={isFetching ? 'Loading…' : 'Select employee…'} />
+            </SelectTrigger>
+            <SelectContent>
+              {(available ?? []).map(emp => (
+                <SelectItem key={emp.id} value={String(emp.id)}>
+                  <span className={availColor(emp.availability)}>●</span>
+                  {' '}{emp.name}
+                </SelectItem>
+              ))}
+              {available?.length === 0 && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">No eligible employees</div>
+              )}
+            </SelectContent>
+          </Select>
         )}
       </div>
+
+      {/* Suggestion result */}
+      {suggestion && (
+        <div className="flex items-center gap-2 pt-1.5 border-t border-border">
+          <span className="text-xs text-muted-foreground flex-1">
+            Suggested: <span className="text-primary font-medium">{suggestion.employee_name}</span>
+            {' · '}est. {new Intl.NumberFormat('hu-HU').format(suggestion.estimated_cost)} HUF
+          </span>
+        </div>
+      )}
+
+      {row.rowError && <p className="text-xs text-destructive">{row.rowError}</p>}
+
+      {canSave && (
+        <div className="flex justify-end">
+          <Button size="sm" className="h-7 text-xs" onClick={onSave} disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PseRowProps {
+  pse: ProjectSkillEmployee;
+  isPM: boolean;
+  employees: Employee[];
+  employeeSkills: SkillEmployee[];
+  onReassign: (empId: number) => void;
+  onRemove: () => void;
+}
+
+function PseRow({ pse, isPM, employees, employeeSkills, onReassign, onRemove }: PseRowProps) {
+  return (
+    <div
+      className="grid gap-3 items-center bg-background rounded-md px-3 py-2 text-sm"
+      style={{ gridTemplateColumns: '1fr 50px 1fr 90px 1fr 40px' }}
+    >
+      <span className="font-medium text-foreground truncate">{pse.skill_name}</span>
+      <Badge variant="outline" className="text-xs font-mono w-fit">
+        Lv.{pse.needed_proficiency}
+      </Badge>
+      <span className="text-xs text-muted-foreground font-mono">
+        {toDateStr(pse.skill_start)} – {toDateStr(pse.skill_end)}
+      </span>
+      <span className="text-xs text-muted-foreground font-mono">
+        {pse.capacity_on_project.toFixed(2)}
+      </span>
+      <div>
+        {isPM ? (
+          <PseReassignSelect pse={pse} employees={employees} employeeSkills={employeeSkills} onReassign={onReassign} />
+        ) : (
+          <span className="text-xs text-primary">{pse.employee_name}</span>
+        )}
+      </div>
+      <div className="flex justify-end">
+        {isPM && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PseReassignSelect({
+  pse,
+  employees,
+  employeeSkills,
+  onReassign,
+}: {
+  pse: ProjectSkillEmployee;
+  employees: Employee[];
+  employeeSkills: SkillEmployee[];
+  onReassign: (empId: number) => void;
+}) {
+  const { data: available } = useAvailableEmployeesBySkill({
+    skill_id: pse.skill_id,
+    start: toDateStr(pse.skill_start),
+    end: toDateStr(pse.skill_end),
+    proficiency: pse.needed_proficiency,
+    needed_capacity: pse.capacity_on_project,
+  });
+
+  // Fall back to local list (without colors) while loading
+  const fallback = employeeSkills
+    .filter(es => es.skill_id === pse.skill_id && es.proficiency >= pse.needed_proficiency)
+    .map(es => employees.find(e => e.id === es.employee_id))
+    .filter((e): e is Employee => Boolean(e));
+
+  return (
+    <Select value={String(pse.employee_id)} onValueChange={v => onReassign(Number(v))}>
+      <SelectTrigger className="h-7 text-xs bg-card w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {available
+          ? available.map(emp => (
+              <SelectItem key={emp.id} value={String(emp.id)}>
+                <span className={availColor(emp.availability)}>●</span>
+                {' '}{emp.name}
+              </SelectItem>
+            ))
+          : fallback.map(emp => (
+              <SelectItem key={emp.id} value={String(emp.id)}>
+                {emp.name}
+              </SelectItem>
+            ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function DatePickerField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Date | undefined;
+  onChange: (d: Date | undefined) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn('w-full h-8 text-xs justify-start', !value && 'text-muted-foreground')}
+          >
+            <CalendarIcon className="w-3 h-3 mr-1" />
+            {value ? format(value, 'yyyy-MM-dd') : 'Pick date'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={onChange}
+            className="p-3 pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
