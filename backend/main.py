@@ -277,6 +277,7 @@ def read_project_skills_employees(db: Session = Depends(get_db)):
     project_skills_employees = db.query(models.ProjectSkillsEmployees).all()
     return [
         {
+            "id": pse.id,
             "project_id": pse.project_id,
             "skill_id": pse.skill_id,
             "employee_id": pse.employee_id,
@@ -340,11 +341,28 @@ def create_project_skill_employee(
             detail=f"Skill assignment end date ({project_skill_employee.skill_end}) cannot be after project end date ({project.end})"
         )
     
+    # Check for overlapping time periods with existing assignments for the same project/skill/employee
+    overlapping_assignment = db.query(models.ProjectSkillsEmployees).filter(
+        models.ProjectSkillsEmployees.project_id == project_skill_employee.project_id,
+        models.ProjectSkillsEmployees.skill_id == project_skill_employee.skill_id,
+        models.ProjectSkillsEmployees.employee_id == project_skill_employee.employee_id,
+        models.ProjectSkillsEmployees.skill_end >= project_skill_employee.skill_start,
+        models.ProjectSkillsEmployees.skill_start <= project_skill_employee.skill_end
+    ).first()
+    
+    if overlapping_assignment:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Employee {project_skill_employee.employee_id} already has overlapping assignment for skill {project_skill_employee.skill_id} on project {project_skill_employee.project_id} "
+            f"from {overlapping_assignment.skill_start} to {overlapping_assignment.skill_end}"
+        )
+    
     db_project_skill_employee = models.ProjectSkillsEmployees(**project_skill_employee.model_dump())
     db.add(db_project_skill_employee)
     db.commit()
     db.refresh(db_project_skill_employee)
     return {
+        "id": db_project_skill_employee.id,
         "project_id": db_project_skill_employee.project_id,
         "skill_id": db_project_skill_employee.skill_id,
         "employee_id": db_project_skill_employee.employee_id,
@@ -357,11 +375,9 @@ def create_project_skill_employee(
         "skill_end": db_project_skill_employee.skill_end
     }
 
-@app.put("/project-skills-employees/{project_id}/{skill_id}/{employee_id}")
+@app.put("/project-skills-employees/{id}")
 def update_project_skill_employee(
-    project_id: int,
-    skill_id: int,
-    employee_id: int,
+    id: int,
     project_skill_employee_update: models.ProjectSkillEmployeeUpdate,
     db: Session = Depends(get_db)
 ):
@@ -369,24 +385,33 @@ def update_project_skill_employee(
     Update project-skill-employee relationship.
     
     Path parameters:
-    - project_id: ID of the project
-    - skill_id: ID of the skill
-    - employee_id: ID of the employee
+    - id: ID of the project-skill-employee relationship
     """
     db_project_skill_employee = db.query(models.ProjectSkillsEmployees).filter(
-        models.ProjectSkillsEmployees.project_id == project_id,
-        models.ProjectSkillsEmployees.skill_id == skill_id,
-        models.ProjectSkillsEmployees.employee_id == employee_id
+        models.ProjectSkillsEmployees.id == id
     ).first()
     if not db_project_skill_employee:
         raise HTTPException(status_code=404, detail="Project-skill-employee relationship not found")
     
     update_data = project_skill_employee_update.model_dump(exclude_unset=True)
     
-    new_skill_id = update_data.get('skill_id', skill_id)
-    new_employee_id = update_data.get('employee_id', employee_id)
+    # Get current values for validation
+    current_skill_id = db_project_skill_employee.skill_id
+    current_employee_id = db_project_skill_employee.employee_id
+    current_project_id = db_project_skill_employee.project_id
     
-    if new_skill_id != skill_id or new_employee_id != employee_id:
+    new_skill_id = update_data.get('skill_id', current_skill_id)
+    new_employee_id = update_data.get('employee_id', current_employee_id)
+    new_project_id = update_data.get('project_id', current_project_id)
+    
+    # Validate that the new project exists if being changed
+    if new_project_id != current_project_id:
+        project = db.query(models.Projects).filter(models.Projects.id == new_project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="New project not found")
+    
+    # Validate that employee has the skill if skill or employee is being changed
+    if new_skill_id != current_skill_id or new_employee_id != current_employee_id:
         skill_employee_check = db.query(models.SkillsEmployees).filter(
             models.SkillsEmployees.skill_id == new_skill_id,
             models.SkillsEmployees.employee_id == new_employee_id
@@ -400,18 +425,38 @@ def update_project_skill_employee(
     new_skill_start = update_data.get('skill_start', db_project_skill_employee.skill_start)
     new_skill_end = update_data.get('skill_end', db_project_skill_employee.skill_end)
     
+    # Get the project to validate against (new project if being changed, otherwise current)
+    validation_project = project if new_project_id != current_project_id else db_project_skill_employee.project
+    
     if new_skill_start != db_project_skill_employee.skill_start or new_skill_end != db_project_skill_employee.skill_end:
-        if new_skill_start < db_project_skill_employee.project.start:
+        if new_skill_start < validation_project.start:
             raise HTTPException(
                 status_code=400,
-                detail=f"Skill assignment start date ({new_skill_start}) cannot be before project start date ({db_project_skill_employee.project.start})"
+                detail=f"Skill assignment start date ({new_skill_start}) cannot be before project start date ({validation_project.start})"
             )
         
-        if new_skill_end > db_project_skill_employee.project.end:
+        if new_skill_end > validation_project.end:
             raise HTTPException(
                 status_code=400,
-                detail=f"Skill assignment end date ({new_skill_end}) cannot be after project end date ({db_project_skill_employee.project.end})"
+                detail=f"Skill assignment end date ({new_skill_end}) cannot be after project end date ({validation_project.end})"
             )
+    
+    # Check for overlapping time periods with other assignments for the same project/skill/employee
+    overlapping_assignment = db.query(models.ProjectSkillsEmployees).filter(
+        models.ProjectSkillsEmployees.project_id == new_project_id,
+        models.ProjectSkillsEmployees.skill_id == new_skill_id,
+        models.ProjectSkillsEmployees.employee_id == new_employee_id,
+        models.ProjectSkillsEmployees.skill_end >= new_skill_start,
+        models.ProjectSkillsEmployees.skill_start <= new_skill_end,
+        models.ProjectSkillsEmployees.id != id  # Exclude current record
+    ).first()
+    
+    if overlapping_assignment:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Employee {new_employee_id} already has overlapping assignment for skill {new_skill_id} on project {new_project_id} "
+            f"from {overlapping_assignment.skill_start} to {overlapping_assignment.skill_end}"
+        )
     
     for field, value in update_data.items():
         setattr(db_project_skill_employee, field, value)
@@ -419,6 +464,7 @@ def update_project_skill_employee(
     db.commit()
     db.refresh(db_project_skill_employee)
     return {
+        "id": db_project_skill_employee.id,
         "project_id": db_project_skill_employee.project_id,
         "skill_id": db_project_skill_employee.skill_id,
         "employee_id": db_project_skill_employee.employee_id,
@@ -431,20 +477,16 @@ def update_project_skill_employee(
         "skill_end": db_project_skill_employee.skill_end
     }
 
-@app.delete("/project-skills-employees/{project_id}/{skill_id}/{employee_id}")
+@app.delete("/project-skills-employees/{id}")
 def delete_project_skill_employee(
-    project_id: int,
-    skill_id: int,
-    employee_id: int,
+    id: int,
     db: Session = Depends(get_db)
 ):
     """
     Delete project-skill-employee relationship.
     """
     db_project_skill_employee = db.query(models.ProjectSkillsEmployees).filter(
-        models.ProjectSkillsEmployees.project_id == project_id,
-        models.ProjectSkillsEmployees.skill_id == skill_id,
-        models.ProjectSkillsEmployees.employee_id == employee_id
+        models.ProjectSkillsEmployees.id == id
     ).first()
     if not db_project_skill_employee:
         raise HTTPException(status_code=404, detail="Project-skill-employee relationship not found")

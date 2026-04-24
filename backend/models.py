@@ -171,9 +171,10 @@ class SkillsEmployees(Base):
 class ProjectSkillsEmployees(Base):
     __tablename__ = "project_skills_employees"
 
-    project_id = Column(Integer, ForeignKey("projects.id"), primary_key=True)
-    skill_id = Column(Integer, ForeignKey("skills.id"), primary_key=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    skill_id = Column(Integer, ForeignKey("skills.id"))
+    employee_id = Column(Integer, ForeignKey("employees.id"))
     needed_proficiency = Column(Integer)
     capacity_on_project = Column(Float)
     skill_start = Column(DateTime)
@@ -324,6 +325,9 @@ class SkillEmployeeUpdate(BaseModel):
     proficiency: int = None
 
 class ProjectSkillEmployeeUpdate(BaseModel):
+    project_id: int = None
+    skill_id: int = None
+    employee_id: int = None
     needed_proficiency: int = None
     capacity_on_project: float = None
     skill_start: datetime = None
