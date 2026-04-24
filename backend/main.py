@@ -341,7 +341,6 @@ def create_project_skill_employee(
             detail=f"Skill assignment end date ({project_skill_employee.skill_end}) cannot be after project end date ({project.end})"
         )
     
-    # Check for overlapping time periods with existing assignments for the same project/skill/employee
     overlapping_assignment = db.query(models.ProjectSkillsEmployees).filter(
         models.ProjectSkillsEmployees.project_id == project_skill_employee.project_id,
         models.ProjectSkillsEmployees.skill_id == project_skill_employee.skill_id,
