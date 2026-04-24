@@ -394,7 +394,6 @@ def update_project_skill_employee(
     
     update_data = project_skill_employee_update.model_dump(exclude_unset=True)
     
-    # Get current values for validation
     current_skill_id = db_project_skill_employee.skill_id
     current_employee_id = db_project_skill_employee.employee_id
     current_project_id = db_project_skill_employee.project_id
@@ -403,13 +402,11 @@ def update_project_skill_employee(
     new_employee_id = update_data.get('employee_id', current_employee_id)
     new_project_id = update_data.get('project_id', current_project_id)
     
-    # Validate that the new project exists if being changed
     if new_project_id != current_project_id:
         project = db.query(models.Projects).filter(models.Projects.id == new_project_id).first()
         if not project:
             raise HTTPException(status_code=404, detail="New project not found")
     
-    # Validate that employee has the skill if skill or employee is being changed
     if new_skill_id != current_skill_id or new_employee_id != current_employee_id:
         skill_employee_check = db.query(models.SkillsEmployees).filter(
             models.SkillsEmployees.skill_id == new_skill_id,
@@ -424,7 +421,6 @@ def update_project_skill_employee(
     new_skill_start = update_data.get('skill_start', db_project_skill_employee.skill_start)
     new_skill_end = update_data.get('skill_end', db_project_skill_employee.skill_end)
     
-    # Get the project to validate against (new project if being changed, otherwise current)
     validation_project = project if new_project_id != current_project_id else db_project_skill_employee.project
     
     if new_skill_start != db_project_skill_employee.skill_start or new_skill_end != db_project_skill_employee.skill_end:
@@ -440,14 +436,13 @@ def update_project_skill_employee(
                 detail=f"Skill assignment end date ({new_skill_end}) cannot be after project end date ({validation_project.end})"
             )
     
-    # Check for overlapping time periods with other assignments for the same project/skill/employee
     overlapping_assignment = db.query(models.ProjectSkillsEmployees).filter(
         models.ProjectSkillsEmployees.project_id == new_project_id,
         models.ProjectSkillsEmployees.skill_id == new_skill_id,
         models.ProjectSkillsEmployees.employee_id == new_employee_id,
         models.ProjectSkillsEmployees.skill_end >= new_skill_start,
         models.ProjectSkillsEmployees.skill_start <= new_skill_end,
-        models.ProjectSkillsEmployees.id != id  # Exclude current record
+        models.ProjectSkillsEmployees.id != id
     ).first()
     
     if overlapping_assignment:
