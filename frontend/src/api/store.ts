@@ -1,12 +1,3 @@
-/**
- * In-memory store backing the mock API.
- *
- * This isolates the seed data + mutations behind an async boundary so the rest
- * of the app talks to "the API" via src/api/*.ts. When you're ready to swap to
- * the real REST backend at http://127.0.0.1:8000, replace the function bodies
- * in projects.ts / skills.ts / employees.ts with fetch() calls — no consumer
- * code (hooks, context, components) needs to change.
- */
 import {
   Project,
   Skill,

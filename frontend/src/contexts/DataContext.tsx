@@ -35,11 +35,11 @@ interface DataContextType {
   // Skill mutations
   createSkill: (data: SkillPost) => void;
   updateSkill: (id: number, updates: SkillUpdate) => void;
-  deleteSkill: (id: number) => void;
+  deleteSkill: (id: number) => Promise<void>;
 
   // Employee mutations
   createEmployee: (data: EmployeePost) => void;
-  deleteEmployee: (id: number) => void;
+  deleteEmployee: (id: number) => Promise<void>;
   addEmployeeSkill: (employeeId: number, skillId: number, proficiency: number) => void;
   removeEmployeeSkill: (skillId: number, employeeId: number) => void;
 }
@@ -84,10 +84,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     createSkill: (data) => createSkillM.mutate(data),
     updateSkill: (id, updates) => updateSkillM.mutate({ id, input: updates }),
-    deleteSkill: (id) => deleteSkillM.mutate(id),
+    deleteSkill: (id) => deleteSkillM.mutateAsync(id),
 
     createEmployee: (data) => createEmployeeM.mutate(data),
-    deleteEmployee: (id) => deleteEmployeeM.mutate(id),
+    deleteEmployee: (id) => deleteEmployeeM.mutateAsync(id),
     addEmployeeSkill: (employeeId, skillId, proficiency) =>
       addEmployeeSkillM.mutate({ employeeId, skillId, proficiency }),
     removeEmployeeSkill: (skillId, employeeId) =>

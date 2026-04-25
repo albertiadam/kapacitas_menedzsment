@@ -119,7 +119,10 @@ export function useDeleteSkill() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => skillsApi.deleteSkill(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.skills }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.skills });
+      qc.invalidateQueries({ queryKey: queryKeys.employeeSkills });
+    },
   });
 }
 
@@ -150,7 +153,10 @@ export function useDeleteEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => employeesApi.deleteEmployee(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.employees }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.employees });
+      qc.invalidateQueries({ queryKey: queryKeys.employeeSkills });
+    },
   });
 }
 

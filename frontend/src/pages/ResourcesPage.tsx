@@ -29,6 +29,8 @@ export default function ResourcesPage() {
   });
   const [addError, setAddError] = useState('');
 
+  const [deleteErrors, setDeleteErrors] = useState<Record<number, string>>({});
+
   const [openSkillFor, setOpenSkillFor] = useState<number | null>(null);
   const [skillSearch, setSkillSearch] = useState('');
   const [skillLevel, setSkillLevel] = useState<Record<number, string>>({});
@@ -227,7 +229,15 @@ export default function ResourcesPage() {
                   <h3 className="text-sm font-semibold text-foreground">{emp.name}</h3>
                   {isManager && (
                     <button
-                      onClick={() => deleteEmployee(emp.id)}
+                      onClick={async () => {
+                        setDeleteErrors(prev => { const next = { ...prev }; delete next[emp.id]; return next; });
+                        try {
+                          await deleteEmployee(emp.id);
+                        } catch (err: any) {
+                          const msg = err.message?.replace(/^API Error \d+: /, '') || 'Delete failed';
+                          setDeleteErrors(prev => ({ ...prev, [emp.id]: msg }));
+                        }
+                      }}
                       className="text-muted-foreground hover:text-destructive transition-colors"
                       aria-label="Delete employee"
                     >
@@ -235,6 +245,9 @@ export default function ResourcesPage() {
                     </button>
                   )}
                 </div>
+                  {deleteErrors[emp.id] && (
+                    <p className="text-xs text-destructive mt-0.5">{deleteErrors[emp.id]}</p>
+                  )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <Activity className="w-3 h-3" />

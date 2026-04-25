@@ -122,7 +122,12 @@ def delete_skill(skill_id: int, db: Session = Depends(get_db)):
     db_skill = db.query(models.Skills).filter(models.Skills.id == skill_id).first()
     if not db_skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-    
+
+    pse_assignments = db.query(models.ProjectSkillsEmployees).filter(models.ProjectSkillsEmployees.skill_id == skill_id).first()
+    if pse_assignments:
+        raise HTTPException(status_code=400, detail="Cannot delete skill with existing project assignments")
+
+    db.query(models.SkillsEmployees).filter(models.SkillsEmployees.skill_id == skill_id).delete()
     db.delete(db_skill)
     db.commit()
     return {"message": "Skill deleted successfully"}
@@ -164,7 +169,12 @@ def delete_employee(employee_id: int, db: Session = Depends(get_db)):
     db_employee = db.query(models.Employees).filter(models.Employees.id == employee_id).first()
     if not db_employee:
         raise HTTPException(status_code=404, detail="Employee not found")
-    
+
+    pse_assignments = db.query(models.ProjectSkillsEmployees).filter(models.ProjectSkillsEmployees.employee_id == employee_id).first()
+    if pse_assignments:
+        raise HTTPException(status_code=400, detail="Cannot delete employee with existing project assignments")
+
+    db.query(models.SkillsEmployees).filter(models.SkillsEmployees.employee_id == employee_id).delete()
     db.delete(db_employee)
     db.commit()
     return {"message": "Employee deleted successfully"}

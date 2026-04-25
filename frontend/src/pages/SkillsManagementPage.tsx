@@ -17,6 +17,8 @@ export default function SkillsManagementPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  const [deleteErrors, setDeleteErrors] = useState<Record<number, string>>({});
+
   const [newSkill, setNewSkill] = useState({ name: '', category: 'Frontend' });
   const [editForm, setEditForm] = useState<{ id: number; name: string; category: string }>({
     id: 0, name: '', category: '',
@@ -145,8 +147,8 @@ export default function SkillsManagementPage() {
       {/* Skill rows */}
       <div className="space-y-1">
         {filtered.map(skill => (
+          <div key={skill.id}>
           <div
-            key={skill.id}
             className="flex items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-md hover:border-primary/30 transition-colors"
           >
             {editingId === skill.id ? (
@@ -202,12 +204,24 @@ export default function SkillsManagementPage() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  onClick={() => deleteSkill(skill.id)}
+                  onClick={async () => {
+                    setDeleteErrors(prev => { const next = { ...prev }; delete next[skill.id]; return next; });
+                    try {
+                      await deleteSkill(skill.id);
+                    } catch (err: any) {
+                      const msg = err.message?.replace(/^API Error \d+: /, '') || 'Delete failed';
+                      setDeleteErrors(prev => ({ ...prev, [skill.id]: msg }));
+                    }
+                  }}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </>
             )}
+          </div>
+          {deleteErrors[skill.id] && (
+            <p className="text-xs text-destructive px-4 pb-1">{deleteErrors[skill.id]}</p>
+          )}
           </div>
         ))}
       </div>
