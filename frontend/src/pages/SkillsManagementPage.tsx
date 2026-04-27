@@ -7,7 +7,7 @@ import { Search, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Skill } from '@/types';
 
-const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Design', 'Management'];
+const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Design', 'Management', 'IT', 'Soft skill'];
 
 export default function SkillsManagementPage() {
   const { skills, createSkill, deleteSkill, updateSkill } = useData();

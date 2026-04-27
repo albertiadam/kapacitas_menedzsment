@@ -1,0 +1,22 @@
+INSERT INTO projects (id, name, status, short_name, description, start, "end", fix_cost, revenue) VALUES
+(1, 'Customer Churn Prediction Platform','COMPLETED'::projectstatus,'CHURN-ML','Machine learning system to predict customer churn for telecom clients','2023-01-11 00:00:00','2023-06-29 23:59:59',320000,780000),
+(2, 'Fraud Detection Engine','ONGOING'::projectstatus,'FRAUD-AI','Real-time fraud detection using anomaly detection models','2023-09-02 00:00:00','2024-05-30 23:59:59',650000,1500000),
+(3, 'Recommendation System for E-commerce','COMPLETED'::projectstatus,'RECO-SYS','Personalized product recommendation engine using collaborative filtering','2022-03-02 00:00:00','2022-12-14 23:59:59',820000,2100000),
+(4, 'Predictive Maintenance System','ONGOING'::projectstatus,'PRED-MAINT','IoT-based predictive maintenance using ML models','2024-01-16 00:00:00','2024-11-29 23:59:59',540000,1300000),
+(5, 'NLP Document Classification Service','COMPLETED'::projectstatus,'NLP-CLASS','Automated document classification using NLP transformers','2023-02-02 00:00:00','2023-08-14 23:59:59',410000,980000),
+(6, 'Computer Vision Quality Control','PLANNED'::projectstatus,'CV-QC','Image-based defect detection system for manufacturing','2024-06-02 00:00:00','2025-01-30 23:59:59',900000,2200000),
+(7, 'Demand Forecasting Model','COMPLETED'::projectstatus,'FORECAST-ML','Time series forecasting for retail demand planning','2022-05-02 00:00:00','2023-01-30 23:59:59',470000,1150000),
+(8, 'Speech Recognition Pipeline','ON_HOLD'::projectstatus,'SPEECH-AI','Speech-to-text system using deep learning models','2023-07-02 00:00:00','2024-02-27 23:59:59',520000,900000),
+(9, 'Customer Segmentation Tool','COMPLETED'::projectstatus,'SEGMENT-ML','Clustering-based customer segmentation platform','2022-01-11 00:00:00','2022-07-19 23:59:59',280000,720000),
+(10, 'Autonomous Driving Simulation Model','CANCELLED'::projectstatus,'AUTO-DRIVE','Simulation environment for autonomous vehicle ML models','2023-03-02 00:00:00','2024-02-01 23:59:59',1200000,950000),
+(11, 'Real-time Recommendation API','ONGOING'::projectstatus,'REALTIME-RECO','Low-latency recommendation serving system','2024-02-02 00:00:00','2024-10-30 23:59:59',880000,2400000),
+(12, 'AI-powered Chatbot Platform','COMPLETED'::projectstatus,'CHATBOT-AI','Conversational AI chatbot for customer support','2022-09-02 00:00:00','2023-04-29 23:59:59',390000,1050000),
+(13, 'Image Segmentation Service','PLANNED'::projectstatus,'IMG-SEG','Deep learning-based image segmentation microservice','2024-07-02 00:00:00','2025-03-30 23:59:59',950000,2600000),
+(14, 'Anomaly Detection Dashboard','ONGOING'::projectstatus,'ANOMALY-DASH','Dashboard for monitoring anomalies in business metrics','2023-11-02 00:00:00','2024-07-30 23:59:59',430000,1200000),
+(15, 'Retail Price Optimization Engine','COMPLETED'::projectstatus,'PRICE-OPT','ML-based price optimization system','2022-04-02 00:00:00','2022-11-29 23:59:59',510000,1350000),
+(16, 'Healthcare Risk Prediction Model','ON_HOLD'::projectstatus,'HEALTH-RISK','Predictive model for patient risk scoring','2023-06-02 00:00:00','2024-01-30 23:59:59',780000,1400000),
+(17, 'Supply Chain Optimization AI','PLANNED'::projectstatus,'SUPPLY-AI','Optimization engine for logistics and supply chain','2024-08-02 00:00:00','2025-05-30 23:59:59',1200000,3000000),
+(18, 'Text Summarization Service','COMPLETED'::projectstatus,'TEXT-SUM','Automatic summarization using transformer models','2022-06-02 00:00:00','2023-02-27 23:59:59',460000,1100000),
+(19, 'Video Analytics Platform','ONGOING'::projectstatus,'VIDEO-AI','Real-time video analytics using computer vision','2024-03-02 00:00:00','2025-01-14 23:59:59',1100000,2800000),
+(20, 'Energy Consumption Forecasting','PLANNED'::projectstatus,'ENERGY-ML','Forecasting system for energy consumption patterns','2024-09-02 00:00:00','2025-06-29 23:59:59',670000,1500000);
+

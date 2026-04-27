@@ -3,6 +3,7 @@ import * as projectsApi from '@/api/projects';
 import * as skillsApi from '@/api/skills';
 import * as employeesApi from '@/api/employees';
 import type {
+  Project,
   ProjectPost, ProjectUpdate,
   SkillPost, SkillUpdate,
   EmployeePost, EmployeeUpdate,
@@ -36,7 +37,20 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: number; updates: ProjectUpdate }) =>
       projectsApi.updateProject(id, updates),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+    onMutate: async ({ id, updates }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.projects });
+      const previous = qc.getQueryData<Project[]>(queryKeys.projects);
+      qc.setQueryData<Project[]>(queryKeys.projects, old =>
+        old?.map(p => (p.id === id ? { ...p, ...updates } : p)) ?? [],
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(queryKeys.projects, context.previous);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
   });
 }
 
