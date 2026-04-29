@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,13 +11,17 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Design', 'Management'];
 const LEVELS = [1, 2, 3];
 
 export default function ResourcesPage() {
   const { isManager } = useAuth();
   const { employees, skills, employeeSkills, createEmployee, deleteEmployee, addEmployeeSkill, removeEmployeeSkill } =
     useData();
+
+  const categories = useMemo(
+    () => [...new Set(skills.map(s => s.category))].sort(),
+    [skills],
+  );
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
@@ -116,7 +120,7 @@ export default function ResourcesPage() {
         </div>
 
         <div className="flex gap-1">
-          {CATEGORIES.map(cat => (
+          {categories.map(cat => (
             <button
               key={cat}
               onClick={() => toggleCategory(cat)}

@@ -28,7 +28,7 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: ProjectPost) => projectsApi.createProject(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.projects }),
   });
 }
 
@@ -50,7 +50,7 @@ export function useUpdateProject() {
         qc.setQueryData(queryKeys.projects, context.previous);
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+    onSettled: () => qc.refetchQueries({ queryKey: queryKeys.projects }),
   });
 }
 
@@ -58,7 +58,7 @@ export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => projectsApi.deleteProject(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.projects }),
   });
 }
 
@@ -77,8 +77,8 @@ export function useCreateProjectSkillEmployee() {
     mutationFn: (data: ProjectSkillEmployeePost) =>
       projectsApi.createProjectSkillEmployee(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSkillEmployees });
-      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.refetchQueries({ queryKey: queryKeys.projectSkillEmployees });
+      qc.refetchQueries({ queryKey: queryKeys.projects });
     },
   });
 }
@@ -89,8 +89,8 @@ export function useUpdateProjectSkillEmployee() {
     mutationFn: ({ id, updates }: { id: number; updates: ProjectSkillEmployeeUpdate }) =>
       projectsApi.updateProjectSkillEmployee(id, updates),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSkillEmployees });
-      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.refetchQueries({ queryKey: queryKeys.projectSkillEmployees });
+      qc.refetchQueries({ queryKey: queryKeys.projects });
     },
   });
 }
@@ -100,8 +100,8 @@ export function useDeleteProjectSkillEmployee() {
   return useMutation({
     mutationFn: (id: number) => projectsApi.deleteProjectSkillEmployee(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSkillEmployees });
-      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.refetchQueries({ queryKey: queryKeys.projectSkillEmployees });
+      qc.refetchQueries({ queryKey: queryKeys.projects });
     },
   });
 }
@@ -116,7 +116,7 @@ export function useCreateSkill() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: SkillPost) => skillsApi.createSkill(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.skills }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.skills }),
   });
 }
 
@@ -125,7 +125,7 @@ export function useUpdateSkill() {
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: SkillUpdate }) =>
       skillsApi.updateSkill(id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.skills }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.skills }),
   });
 }
 
@@ -134,8 +134,8 @@ export function useDeleteSkill() {
   return useMutation({
     mutationFn: (id: number) => skillsApi.deleteSkill(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.skills });
-      qc.invalidateQueries({ queryKey: queryKeys.employeeSkills });
+      qc.refetchQueries({ queryKey: queryKeys.skills });
+      qc.refetchQueries({ queryKey: queryKeys.employeeSkills });
     },
   });
 }
@@ -150,7 +150,7 @@ export function useCreateEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: EmployeePost) => employeesApi.createEmployee(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.employees }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.employees }),
   });
 }
 
@@ -159,7 +159,7 @@ export function useUpdateEmployee() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: number; updates: EmployeeUpdate }) =>
       employeesApi.updateEmployee(id, updates),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.employees }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.employees }),
   });
 }
 
@@ -168,8 +168,8 @@ export function useDeleteEmployee() {
   return useMutation({
     mutationFn: (id: number) => employeesApi.deleteEmployee(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.employees });
-      qc.invalidateQueries({ queryKey: queryKeys.employeeSkills });
+      qc.refetchQueries({ queryKey: queryKeys.employees });
+      qc.refetchQueries({ queryKey: queryKeys.employeeSkills });
     },
   });
 }
@@ -195,7 +195,7 @@ export function useAddEmployeeSkill() {
       skillId: number;
       proficiency: number;
     }) => employeesApi.addEmployeeSkill(employeeId, skillId, proficiency),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.employeeSkills }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.employeeSkills }),
   });
 }
 
@@ -232,6 +232,6 @@ export function useRemoveEmployeeSkill() {
   return useMutation({
     mutationFn: ({ skillId, employeeId }: { skillId: number; employeeId: number }) =>
       employeesApi.removeEmployeeSkill(skillId, employeeId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.employeeSkills }),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.employeeSkills }),
   });
 }
