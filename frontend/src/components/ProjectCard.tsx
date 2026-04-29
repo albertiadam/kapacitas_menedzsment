@@ -408,12 +408,13 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
             {projectSkillEmployees.length > 0 && (
               <div
                 className="grid gap-3 text-xs text-muted-foreground font-medium uppercase tracking-wider px-3 py-1.5 border-b border-border mb-1"
-                style={{ gridTemplateColumns: '1fr 50px 1fr 90px 1fr 40px' }}
+                style={{ gridTemplateColumns: project.status === 'completed' ? '1fr 50px 1fr 80px 80px 1fr 40px' : '1fr 50px 1fr 90px 1fr 40px' }}
               >
                 <span>Skill</span>
                 <span>Lv.</span>
                 <span>Interval</span>
                 <span>Cap.</span>
+                {project.status === 'completed' && <span>Actual</span>}
                 <span>Assigned</span>
                 <span />
               </div>
@@ -425,10 +426,12 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
                   key={pse.id}
                   pse={pse}
                   isPM={isPM}
+                  isCompleted={project.status === 'completed'}
                   employees={employees}
                   employeeSkills={employeeSkills}
                   onReassign={empId => updateProjectSkillEmployee(pse.id, { employee_id: empId })}
                   onRemove={() => deleteProjectSkillEmployee(pse.id)}
+                  onUpdateActualCap={val => updateProjectSkillEmployee(pse.id, { capacity_worked_on_project: val })}
                 />
               ))}
             </div>
@@ -666,17 +669,28 @@ function PendingRowForm({ row, index, skills, isSaving, onUpdate, onRemove, onSa
 interface PseRowProps {
   pse: ProjectSkillEmployee;
   isPM: boolean;
+  isCompleted: boolean;
   employees: Employee[];
   employeeSkills: SkillEmployee[];
   onReassign: (empId: number) => void;
   onRemove: () => void;
+  onUpdateActualCap: (val: number) => void;
 }
 
-function PseRow({ pse, isPM, employees, employeeSkills, onReassign, onRemove }: PseRowProps) {
+function PseRow({ pse, isPM, isCompleted, employees, employeeSkills, onReassign, onRemove, onUpdateActualCap }: PseRowProps) {
+  const [actualCap, setActualCap] = useState(String(pse.capacity_worked_on_project ?? ''));
+
+  const handleActualCapBlur = () => {
+    const val = Number(actualCap);
+    if (!Number.isNaN(val) && val >= 0 && val <= 1) {
+      onUpdateActualCap(val);
+    }
+  };
+
   return (
     <div
       className="grid gap-3 items-center bg-background rounded-md px-3 py-2 text-sm"
-      style={{ gridTemplateColumns: '1fr 50px 1fr 90px 1fr 40px' }}
+      style={{ gridTemplateColumns: isCompleted ? '1fr 50px 1fr 80px 80px 1fr 40px' : '1fr 50px 1fr 90px 1fr 40px' }}
     >
       <span className="font-medium text-foreground truncate">{pse.skill_name}</span>
       <Badge variant="outline" className="text-xs font-mono w-fit">
@@ -688,6 +702,20 @@ function PseRow({ pse, isPM, employees, employeeSkills, onReassign, onRemove }: 
       <span className="text-xs text-muted-foreground font-mono">
         {pse.capacity_on_project.toFixed(2)}
       </span>
+      {isCompleted && (
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          max="1"
+          value={actualCap}
+          onChange={e => setActualCap(e.target.value)}
+          onBlur={handleActualCapBlur}
+          onKeyDown={e => e.key === 'Enter' && handleActualCapBlur()}
+          className="h-7 text-xs bg-card px-2"
+          placeholder="0–1"
+        />
+      )}
       <div>
         {isPM ? (
           <PseReassignSelect pse={pse} employees={employees} employeeSkills={employeeSkills} onReassign={onReassign} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,13 @@ import { Search, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Skill } from '@/types';
 
-const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Design', 'Management', 'IT', 'Soft skill'];
-
 export default function SkillsManagementPage() {
   const { skills, createSkill, deleteSkill, updateSkill } = useData();
+
+  const categories = useMemo(
+    () => [...new Set(skills.map(s => s.category))].sort(),
+    [skills],
+  );
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -19,7 +22,7 @@ export default function SkillsManagementPage() {
 
   const [deleteErrors, setDeleteErrors] = useState<Record<number, string>>({});
 
-  const [newSkill, setNewSkill] = useState({ name: '', category: 'Frontend' });
+  const [newSkill, setNewSkill] = useState({ name: '', category: '' });
   const [editForm, setEditForm] = useState<{ id: number; name: string; category: string }>({
     id: 0, name: '', category: '',
   });
@@ -41,9 +44,9 @@ export default function SkillsManagementPage() {
   });
 
   const handleAdd = () => {
-    if (!newSkill.name.trim()) return;
-    createSkill({ name: newSkill.name.trim(), category: newSkill.category });
-    setNewSkill({ name: '', category: 'Frontend' });
+    if (!newSkill.name.trim() || !newSkill.category.trim()) return;
+    createSkill({ name: newSkill.name.trim(), category: newSkill.category.trim() });
+    setNewSkill({ name: '', category: '' });
     setShowAdd(false);
   };
 
@@ -60,8 +63,8 @@ export default function SkillsManagementPage() {
   return (
     <div>
       {/* KPI summary */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-        {CATEGORIES.map(cat => (
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        {categories.map(cat => (
           <div
             key={cat}
             className="bg-card border border-border rounded-lg p-3 text-center"
@@ -89,7 +92,7 @@ export default function SkillsManagementPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {CATEGORIES.map(c => (
+            {categories.map(c => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>
@@ -104,6 +107,9 @@ export default function SkillsManagementPage() {
       {/* Add form */}
       {showAdd && (
         <div className="bg-card border border-border rounded-lg p-4 mb-4 animate-fade-in">
+          <datalist id="category-suggestions">
+            {categories.map(c => <option key={c} value={c} />)}
+          </datalist>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs text-muted-foreground">Name</Label>
@@ -115,21 +121,17 @@ export default function SkillsManagementPage() {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Category</Label>
-              <select
+              <Input
+                list="category-suggestions"
                 value={newSkill.category}
                 onChange={e => setNewSkill(p => ({ ...p, category: e.target.value }))}
-                className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground"
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                placeholder="Pick or type a category..."
+                className="bg-background h-8"
+              />
             </div>
           </div>
           <div className="flex gap-2 mt-3">
-            <Button size="sm" onClick={handleAdd}>Add</Button>
+            <Button size="sm" onClick={handleAdd} disabled={!newSkill.name.trim() || !newSkill.category.trim()}>Add</Button>
             <Button size="sm" variant="outline" onClick={() => setShowAdd(false)}>
               Cancel
             </Button>
@@ -158,17 +160,13 @@ export default function SkillsManagementPage() {
                   onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
                   className="bg-background h-7 text-sm flex-1"
                 />
-                <select
+                <Input
+                  list="category-suggestions"
                   value={editForm.category}
                   onChange={e => setEditForm(p => ({ ...p, category: e.target.value }))}
-                  className="h-7 px-2 rounded border border-border bg-background text-xs text-foreground w-32"
-                >
-                  {CATEGORIES.map(c => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Category..."
+                  className="bg-background h-7 text-xs w-32"
+                />
                 <Button
                   variant="ghost"
                   size="icon"
