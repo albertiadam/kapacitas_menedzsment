@@ -152,9 +152,11 @@ export default function ResourcesPage() {
           </SelectContent>
         </Select>
 
-        <Button size="sm" className="h-9 ml-auto" onClick={() => setShowAdd(s => !s)}>
-          <Plus className="w-4 h-4 mr-1" /> Add Employee
-        </Button>
+        {isManager && (
+          <Button size="sm" className="h-9 ml-auto" onClick={() => setShowAdd(s => !s)}>
+            <Plus className="w-4 h-4 mr-1" /> Add Employee
+          </Button>
+        )}
       </div>
 
       {/* Add employee form */}
@@ -289,13 +291,15 @@ export default function ResourcesPage() {
                           />
                         ))}
                       </div>
-                      <button
-                        onClick={() => removeEmployeeSkill(skill.skill_id, emp.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                        aria-label="Remove skill"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      {isManager && (
+                        <button
+                          onClick={() => removeEmployeeSkill(skill.skill_id, emp.id)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                          aria-label="Remove skill"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -305,61 +309,63 @@ export default function ResourcesPage() {
               </div>
 
               {/* Add skill */}
-              <div className="flex items-center gap-1.5 pt-2 border-t border-border">
-                <Popover
-                  open={openSkillFor === emp.id}
-                  onOpenChange={o => {
-                    setOpenSkillFor(o ? emp.id : null);
-                    if (!o) setSkillSearch('');
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-7 text-xs flex-1">
-                      <Plus className="w-3 h-3 mr-1" /> Add skill
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-64 bg-popover" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="Search skill..."
-                        value={skillSearch}
-                        onValueChange={setSkillSearch}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No skill found.</CommandEmpty>
-                        <CommandGroup>
-                          {availableSkills.map(s => (
-                            <CommandItem
-                              key={s.id}
-                              value={s.name}
-                              onSelect={() => handleAssignSkill(emp.id, s.id)}
-                            >
-                              <span className="flex-1">{s.name}</span>
-                              <span className="text-xs text-muted-foreground">{s.category}</span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+              {isManager && (
+                <div className="flex items-center gap-1.5 pt-2 border-t border-border">
+                  <Popover
+                    open={openSkillFor === emp.id}
+                    onOpenChange={o => {
+                      setOpenSkillFor(o ? emp.id : null);
+                      if (!o) setSkillSearch('');
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-xs flex-1">
+                        <Plus className="w-3 h-3 mr-1" /> Add skill
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-64 bg-popover" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search skill..."
+                          value={skillSearch}
+                          onValueChange={setSkillSearch}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No skill found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableSkills.map(s => (
+                              <CommandItem
+                                key={s.id}
+                                value={s.name}
+                                onSelect={() => handleAssignSkill(emp.id, s.id)}
+                              >
+                                <span className="flex-1">{s.name}</span>
+                                <span className="text-xs text-muted-foreground">{s.category}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
 
-                <Select
-                  value={currentLevel}
-                  onValueChange={v => setSkillLevel(p => ({ ...p, [emp.id]: v }))}
-                >
-                  <SelectTrigger className="h-7 text-xs bg-background w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LEVELS.map(l => (
-                      <SelectItem key={l} value={String(l)}>
-                        Lv.{l}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <Select
+                    value={currentLevel}
+                    onValueChange={v => setSkillLevel(p => ({ ...p, [emp.id]: v }))}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEVELS.map(l => (
+                        <SelectItem key={l} value={String(l)}>
+                          Lv.{l}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           );
         })}

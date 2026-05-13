@@ -30,7 +30,7 @@ function getSortValue(p: Project, col: SortColumn): string {
 }
 
 export default function ProjectsPage() {
-  const { isManager } = useAuth();
+  const { isManager, employeeId } = useAuth();
   const { projects, projectSkillEmployees } = useData();
   const navigate = useNavigate();
 
@@ -40,7 +40,15 @@ export default function ProjectsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterRow[]>([]);
 
-  let filtered = [...projects];
+  const visibleProjects = isManager
+    ? projects
+    : projects.filter(p =>
+        projectSkillEmployees.some(
+          pse => pse.project_id === p.id && pse.employee_id === employeeId,
+        ),
+      );
+
+  let filtered = [...visibleProjects];
 
   if (search) {
     const q = search.toLowerCase();

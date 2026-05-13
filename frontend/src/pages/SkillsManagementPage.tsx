@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Skill } from '@/types';
 
 export default function SkillsManagementPage() {
+  const { isManager } = useAuth();
   const { skills, createSkill, deleteSkill, updateSkill } = useData();
 
   const categories = useMemo(
@@ -99,9 +101,11 @@ export default function SkillsManagementPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button size="sm" onClick={() => setShowAdd(!showAdd)} className="h-9">
-          <Plus className="w-4 h-4 mr-1" /> Add Skill
-        </Button>
+        {isManager && (
+          <Button size="sm" onClick={() => setShowAdd(!showAdd)} className="h-9">
+            <Plus className="w-4 h-4 mr-1" /> Add Skill
+          </Button>
+        )}
       </div>
 
       {/* Add form */}
@@ -190,30 +194,34 @@ export default function SkillsManagementPage() {
                 <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded w-32 text-center">
                   {skill.category}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                  onClick={() => startEdit(skill)}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  onClick={async () => {
-                    setDeleteErrors(prev => { const next = { ...prev }; delete next[skill.id]; return next; });
-                    try {
-                      await deleteSkill(skill.id);
-                    } catch (err: any) {
-                      const msg = err.message?.replace(/^API Error \d+: /, '') || 'Delete failed';
-                      setDeleteErrors(prev => ({ ...prev, [skill.id]: msg }));
-                    }
-                  }}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+                {isManager && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    onClick={() => startEdit(skill)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {isManager && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={async () => {
+                      setDeleteErrors(prev => { const next = { ...prev }; delete next[skill.id]; return next; });
+                      try {
+                        await deleteSkill(skill.id);
+                      } catch (err: any) {
+                        const msg = err.message?.replace(/^API Error \d+: /, '') || 'Delete failed';
+                        setDeleteErrors(prev => ({ ...prev, [skill.id]: msg }));
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                )}
               </>
             )}
           </div>

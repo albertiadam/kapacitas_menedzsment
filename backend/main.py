@@ -30,6 +30,21 @@ def read_root():
     return {"message": "Capacity management system"}
 
 
+# AUTH
+
+@app.post("/login", response_model=models.LoginResponse)
+def login(request: models.LoginRequest, db: Session = Depends(get_db)):
+    if request.username == "manager" and request.password == "password":
+        return models.LoginResponse(role="manager", name="Manager", employee_id=None)
+    if request.password == "password":
+        employee = db.query(models.Employees).filter(
+            models.Employees.name == request.username
+        ).first()
+        if employee:
+            return models.LoginResponse(role="employee", name=employee.name, employee_id=employee.id)
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
 # PROJECTS
 
 @app.get("/projects", response_model=List[models.ProjectResponse])

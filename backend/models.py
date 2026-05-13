@@ -413,3 +413,12 @@ class SuggestTeamRequest(BaseModel):
         if preference not in ('cost', 'capacity'):
             raise ValueError('preference must be cost or capacity')
         return preference
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    role: str
+    name: str
+    employee_id: int | None = None

@@ -83,7 +83,11 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
   const [savingRows, setSavingRows] = useState<Set<number>>(new Set());
   const nextRowId = useRef(0);
 
-  const { isPM, isManager } = useAuth();
+  const { isManager, employeeId } = useAuth();
+  const isPMOnProject = !isManager && !!employeeId && projectSkillEmployees.some(
+    pse => pse.employee_id === employeeId && pse.skill_name === 'PM',
+  );
+  const canManageProject = isManager || isPMOnProject;
   const {
     updateProject, deleteProject, deleteProjectSkillEmployee, updateProjectSkillEmployee,
     createProjectSkillEmployee, skills, employees, employeeSkills,
@@ -264,7 +268,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
               Details
             </h3>
             <div className="flex gap-2">
-              {isPM && (
+              {canManageProject && (
                 <Select
                   value={project.status}
                   onValueChange={v => updateProject(project.id, { status: v as ProjectStatus })}
@@ -281,7 +285,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
                   </SelectContent>
                 </Select>
               )}
-              {!editing ? (
+              {canManageProject && (!editing ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -304,7 +308,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
                     <X className="w-3 h-3 mr-1" /> Cancel
                   </Button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
 
@@ -386,7 +390,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Skill Assignments
               </h4>
-              {isPM && (
+              {canManageProject && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -425,7 +429,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
                 <PseRow
                   key={pse.id}
                   pse={pse}
-                  isPM={isPM}
+                  isPM={canManageProject}
                   isCompleted={project.status === 'completed'}
                   employees={employees}
                   employeeSkills={employeeSkills}
@@ -437,7 +441,7 @@ export function ProjectCard({ project, projectSkillEmployees }: Props) {
             </div>
 
             {/* Batch assignment panel */}
-            {showBatch && isPM && (
+            {showBatch && canManageProject && (
               <div className="mt-3 p-3 border border-primary/30 rounded-md bg-background animate-fade-in space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

@@ -11,10 +11,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = login(username, password);
+    const success = await login(username, password);
     if (!success) {
       setError('Invalid credentials');
     }
@@ -65,7 +65,7 @@ export default function LoginPage() {
 
           <div className="text-xs text-muted-foreground text-center space-y-1 pt-2 border-t border-border">
             <p className="font-mono">Manager → manager / password</p>
-            <p className="font-mono">PM → pm / password</p>
+            <p className="font-mono">Employee → [saját neve] / password</p>
           </div>
         </form>
       </div>
